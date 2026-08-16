@@ -1,0 +1,1135 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+  <title>بوابة الفنيين الميدانيين - ألياف التقنية (FiberTech)</title>
+  
+  <link rel="stylesheet" href="style.css">
+  <link rel="manifest" href="manifest.json">
+  <meta name="theme-color" content="#1b4d4f">
+
+  <!-- ============ إعدادات إضافية لدعم تثبيت التطبيق (PWA) بشكل صحيح على الجوال ============ -->
+  <!-- دعم تشغيل التطبيق كتطبيق مستقل على أندرويد -->
+  <meta name="mobile-web-app-capable" content="yes">
+  <!-- دعم تشغيل التطبيق كتطبيق مستقل على iOS (سفاري لا يعتمد بالكامل على manifest.json) -->
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="apple-mobile-web-app-title" content="FieldTech">
+  <!-- أيقونة الشاشة الرئيسية على iOS (سفاري لا يقرأ الأيقونات من manifest.json) -->
+  <link rel="apple-touch-icon" href="./icons/icon-192.png">
+  <link rel="apple-touch-icon" sizes="192x192" href="./icons/icon-192.png">
+  <link rel="apple-touch-icon" sizes="512x512" href="./icons/icon-512.png">
+  <!-- أيقونة المتصفح -->
+  <link rel="icon" type="image/png" sizes="192x192" href="./icons/icon-192.png">
+
+  <!-- مكتبة Dexie.js لـ IndexedDB -->
+  <!-- إصلاح: كان الرابط بدون تثبيت إصدار (unpkg.com/dexie/...) فيجلب دائماً آخر إصدار،
+       وأي تحديث كبير (breaking change) على مكتبة Dexie مستقبلاً قد يكسر التطبيق فجأة
+       دون أي تغيير في كودنا. تم تثبيته على الإصدار الرئيسي 3 (متوافق مع كل الكود الحالي)
+       بنفس أسلوب تثبيت بقية المكتبات أدناه (html5-qrcode@2.3.8, jspdf@2.5.1, ...). -->
+  <script src="https://unpkg.com/dexie@3/dist/dexie.js"></script>
+  <!-- مكتبة html5-qrcode لمسح الباركود والـ QR -->
+  <script src="https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
+  <script src="https://unpkg.com/jsqr@1.4.0/dist/jsQR.js"></script>
+  <!-- مكتبات تصدير تقرير PDF لكل مهمة (jsPDF + html2canvas لدعم النص العربي عبر التقاط لقطة للتقرير) -->
+  <script src="https://unpkg.com/jspdf@2.5.1/dist/jspdf.umd.min.js"></script>
+  <script src="https://unpkg.com/html2canvas@1.4.1/dist/html2canvas.min.js"></script>
+  <!-- مكتبة Leaflet لعرض خريطة تتبع مواقع الفنيين المباشرة -->
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+</head>
+<body class="bg-pattern">
+
+  <!-- ======================= شاشة تسجيل الدخول ======================= -->
+  <div id="ft-login-screen" class="ft-login-screen">
+    <div class="ft-login-grid-overlay"></div>
+    <div class="ft-login-card">
+      <div class="ft-login-mark">FT</div>
+      <div class="ft-login-title">بوابة الفنيين الميدانيين - ألياف التقنية</div>
+      <div class="ft-login-sub">سجّل الدخول للمتابعة إلى لوحتك الخاصة</div>
+
+      <div id="ft-login-error" class="ft-login-error hidden"></div>
+
+      <form id="ft-login-form" onsubmit="ftHandleLogin(event)" autocomplete="off">
+        <div class="form-group">
+          <label>اسم المستخدم</label>
+          <input type="text" id="ft-login-username" required placeholder="أدخل اسم المستخدم">
+        </div>
+        <div class="form-group">
+          <label>كلمة المرور</label>
+          <input type="password" id="ft-login-password" required placeholder="أدخل كلمة المرور">
+        </div>
+        <button type="submit" class="btn btn-teal-add" style="width:100%; padding:12px; font-size:0.95rem;">تسجيل الدخول</button>
+      </form>
+
+      <div class="ft-login-hint">
+        سيتم توجيهك تلقائياً حسب نوع حسابك (مسؤول أو موظف)<br>
+        حساب المسؤول الافتراضي: <b>admin</b> / <b>admin123</b>
+      </div>
+    </div>
+  </div>
+
+  <!-- ======================= التطبيق (يظهر بعد تسجيل الدخول) ======================= -->
+  <div id="ft-app-wrapper" class="hidden">
+
+  <!-- شريط حالة الاتصال بالشبكة -->
+  <div id="network-status-bar" class="status-bar online">
+    <span id="status-text" data-i18n="netOnline">🌐 الاتصال: متصل (Online)</span>
+    <span class="divider">|</span>
+    <span><span data-i18n="pendingSync">⏳ العمليات المعلقة بالرفع:</span> <strong id="pending-count">0</strong></span>
+  </div>
+
+  <!-- الهيدر الرئيسي المحدث -->
+  <header class="app-header header-bg-overlay">
+    <div class="header-inner">
+      <div class="header-brand">
+        <!-- شعار ورمز الشركة -->
+        <div class="brand-logo" title="FiberTech Logo">
+          <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="#2b7a78" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z"></path>
+          </svg>
+        </div>
+        <h1 class="brand-title" data-i18n="companyTitle">ألياف التقنية (FiberTech ISP)</h1>
+      </div>
+
+      <!-- حقل البحث الشامل لكل الصفحات -->
+      <div class="global-search-container">
+        <input type="text" id="global-search-input" data-i18n-placeholder="searchPlaceholder" placeholder="🔍 بحث في كافة الصفحات والعملاء والمهام..." oninput="handleGlobalSearch(this.value)">
+      </div>
+
+      <div class="header-actions-right">
+        <!-- زر تحويل اللغة -->
+        <button class="btn-lang-header" onclick="toggleAppLanguage()">
+          <span id="current-lang-btn-text">English</span>
+        </button>
+
+        <!-- زر النمط الداكن -->
+        <button class="btn-theme-header" onclick="toggleDarkTheme()" title="تغيير المظهر">
+          <span id="theme-icon">🌙</span>
+        </button>
+
+        <div class="user-profile-header">
+          <div class="avatar-circle">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
+              <path d="M12 7V3H2v18h20V7H12zm-2 12H4v-2h6v2zm0-4H4v-2h6v2zm0-4H4v-2h6v2zm0-4H4V5h6v2zm10 12h-8V9h8v10zm-2-8h-4v2h4v-2zm0 4h-4v2h4v-2z"/>
+            </svg>
+          </div>
+          <span id="ft-user-name-badge" class="user-name-text">—</span>
+          <span id="ft-user-role-badge" class="ft-role-chip">—</span>
+        </div>
+
+        <button class="btn-lang-header btn-logout-header" onclick="ftLogout()" title="تسجيل الخروج">🚪 خروج</button>
+      </div>
+    </div>
+  </header>
+
+  <!-- شريط القائمة المنفردة المنسدلة المحدث -->
+  <div class="top-nav-bar">
+    <div class="top-nav-inner">
+      <div class="dropdown-nav-wrapper">
+        <button class="nav-dropdown-trigger-btn" onclick="toggleNavigationDropdown()">
+          <span class="nav-hamburger-icon">☰</span>
+          <span data-i18n="navMenuTitle">القائمة الرئيسية</span>
+        </button>
+        <!-- الخلفية الداكنة التي تظهر خلف القائمة الجانبية وتُغلقها عند الضغط عليها -->
+        <div id="nav-menu-backdrop" class="nav-menu-backdrop hidden" onclick="toggleNavigationDropdown()"></div>
+        <div id="nav-menu-dropdown" class="nav-dropdown-menu">
+          <div class="nav-menu-sidebar-header">
+            <span data-i18n="navMenuTitle">☰ القائمة الرئيسية</span>
+            <button type="button" class="nav-menu-close-btn" onclick="toggleNavigationDropdown()" aria-label="إغلاق القائمة">✕</button>
+          </div>
+          <button class="top-nav-item active ft-manager-only-nav" onclick="switchTab('dashboard', this)">
+            <span class="nav-icon">📊</span>
+            <span data-i18n="navDashboard">لوحة التحكم (Dashboard)</span>
+          </button>
+          <button class="top-nav-item ft-manager-only-nav" onclick="switchTab('active-tasks', this)">
+            <span class="nav-icon">📋</span>
+            <span data-i18n="navActiveTasks">المهام النشطة (Active Tasks)</span>
+          </button>
+          <button class="top-nav-item ft-manager-only-nav" onclick="switchTab('calendar', this)">
+            <span class="nav-icon">🗓️</span>
+            <span data-i18n="navCalendar">جدولة المهام (Calendar)</span>
+          </button>
+          <button class="top-nav-item ft-manager-only-nav" onclick="switchTab('clients', this)">
+            <span class="nav-icon">👥</span>
+            <span data-i18n="navClients">جدول العملاء</span>
+          </button>
+          <button class="top-nav-item ft-manager-only-nav" onclick="switchTab('transferred-tasks', this)">
+            <span class="nav-icon">🔄</span>
+            <span data-i18n="navTransferred">المهام المنقولة (Transferred)</span>
+          </button>
+          <button class="top-nav-item ft-manager-only-nav" onclick="switchTab('notes', this)">
+            <span class="nav-icon">📝</span>
+            <span data-i18n="navNotes">ملاحظات المهام (Task Notes)</span>
+          </button>
+          <button class="top-nav-item ft-manager-only-nav" onclick="switchTab('history', this)">
+            <span class="nav-icon">📜</span>
+            <span data-i18n="navHistory">السجل المكتمل (History)</span>
+          </button>
+          <button class="top-nav-item ft-manager-only-nav" onclick="switchTab('reports', this)">
+            <span class="nav-icon">📈</span>
+            <span data-i18n="navReports">التقارير (Reports)</span>
+          </button>
+          <button class="top-nav-item ft-manager-only-nav" onclick="switchTab('tasks', this)">
+            <span class="nav-icon">📑</span>
+            <span data-i18n="navTasks">إدارة المهام (Tasks)</span>
+          </button>
+          <button class="top-nav-item ft-manager-only-nav" onclick="switchTab('settings', this)">
+            <span class="nav-icon">⚙️</span>
+            <span data-i18n="navSettings">الإعدادات (Settings)</span>
+          </button>
+          <button class="top-nav-item ft-manager-only-nav" onclick="switchTab('performance', this)"><span class="nav-icon">🏆</span><span data-i18n="navPerformance">تقييم أداء الفنيين</span></button>
+          <button class="top-nav-item ft-manager-only-nav" onclick="switchTab('inventory', this)"><span class="nav-icon">📦</span><span data-i18n="navInventory">إدارة مخزون العتاد</span></button>
+          <button id="nav-item-tech-map" class="top-nav-item hidden" onclick="switchTab('tech-map', this)">
+            <span class="nav-icon">🗺️</span>
+            <span data-i18n="navTechMap">خريطة تتبع الفنيين (Live Map)</span>
+          </button>
+          <button id="nav-item-employees" class="top-nav-item hidden" onclick="switchTab('employees', this)">
+            <span class="nav-icon">🧑‍💼</span>
+            <span data-i18n="navEmployees">إدارة الموظفين (Employees)</span>
+          </button>
+          <button id="nav-item-messages" class="top-nav-item hidden" onclick="switchTab('messages', this)">
+            <span class="nav-icon">📩</span>
+            <span><span data-i18n="navMessages">الرسائل والطلبات (Messages)</span> <span id="ft-messages-badge" class="ft-badge-count hidden">0</span></span>
+          </button>
+          <button id="nav-item-profile" class="top-nav-item hidden" onclick="switchTab('profile', this)">
+            <span class="nav-icon">👤</span>
+            <span><span data-i18n="navProfile">ملفي الشخصي (My Profile)</span> <span id="ft-profile-messages-badge" class="ft-badge-count hidden">0</span></span>
+          </button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- الحاوية الرئيسية -->
+  <main class="app-container">
+
+    <!-- 1. صفحة اللوحة الرئيسية Dashboard -->
+    <div id="view-dashboard" class="app-view">
+      <!-- بانر تنبيه اقتراب/تجاوز الموعد النهائي (SLA) — يظهر تلقائياً للمسؤول فقط عند وجود مهام مهدَّدة -->
+      <div id="sla-alert-banner" class="sla-banner hidden"></div>
+
+      <section class="dashboard-analytics card card-tech-bg">
+        <div class="analytics-grid">
+          
+          <div class="gauge-card">
+            <div class="gauge-body">
+              <svg class="gauge-svg" viewBox="0 0 100 60">
+                <path class="gauge-bg-path" d="M 10 50 A 40 40 0 0 1 90 50" fill="none" stroke="#e2e8f0" stroke-width="12" stroke-linecap="round"/>
+                <path class="gauge-fill-path" d="M 10 50 A 40 40 0 0 1 90 50" fill="none" stroke="#2c7a7b" stroke-width="12" stroke-linecap="round" stroke-dasharray="125" stroke-dashoffset="62.5"/>
+              </svg>
+              <div class="gauge-center-text">
+                <span class="gauge-number" id="stat-total">0</span>
+                <span class="gauge-label" data-i18n="statTotal">المجموع</span>
+              </div>
+            </div>
+          </div>
+
+          <div class="stats-legend-column">
+            <div class="legend-item"><span class="dot dot-total"></span> <span data-i18n="statTotalTasks">إجمالي المهام:</span> <strong id="stat-total-val">0</strong></div>
+            <div class="legend-item"><span class="dot dot-progress"></span> <span data-i18n="statInProgress">قيد التنفيذ:</span> <strong id="stat-pending">0</strong></div>
+            <div class="legend-item"><span class="dot dot-completed"></span> <span data-i18n="statCompleted">مكتملة:</span> <strong id="stat-completed">0</strong></div>
+            <div class="legend-item"><span class="dot dot-onhold"></span> <span data-i18n="statPendingTrans">معلقة / منقولة:</span> <strong id="stat-onhold">0</strong></div>
+          </div>
+
+          <div class="bars-column">
+            <div class="bar-row-item">
+              <div class="bar-info-line">
+                <span data-i18n="statInProgress">قيد التنفيذ</span>
+                <span class="bar-count-badge" id="bar-val-progress">0</span>
+              </div>
+              <div class="bar-track"><div class="bar-fill fill-progress" id="bar-fill-progress" style="width: 0%;"></div></div>
+            </div>
+            
+            <div class="bar-row-item">
+              <div class="bar-info-line">
+                <span data-i18n="statCompleted">مكتملة</span>
+                <span class="bar-count-badge" id="bar-val-completed">0</span>
+              </div>
+              <div class="bar-track"><div class="bar-fill fill-completed" id="bar-fill-completed" style="width: 0%;"></div></div>
+            </div>
+
+            <div class="bar-row-item">
+              <div class="bar-info-line">
+                <span class="bar-percent-text"><span data-i18n="statCompletionRate">نسبة الإنجاز:</span> <strong id="stat-percent-completed">0%</strong></span>
+                <span class="bar-percent-text"><span data-i18n="statPendingRate">قيد التنفيذ:</span> <strong id="stat-percent-pending">0%</strong></span>
+              </div>
+            </div>
+          </div>
+
+        </div>
+      </section>
+
+      <!-- جدول العرض الرئيسي للمهام في اللوحة -->
+      <section id="work-orders-section" class="card main-table-card">
+        <div class="table-toolbar">
+          <h2 class="toolbar-title" data-i18n="currentTasks">المهام الحالية</h2>
+          
+          <div class="toolbar-actions">
+            <div class="select-dropdown-wrap">
+              <select id="filter-all-select" onchange="filterOrders(this.value)">
+                <option value="all" data-i18n="filterAll">الكل</option>
+                <option value="pending" data-i18n="filterPending">قيد التنفيذ</option>
+                <option value="completed" data-i18n="filterCompleted">مكتملة</option>
+                <option value="on_hold" data-i18n="filterOnhold">معلقة</option>
+                <option value="transferred" data-i18n="filterTransferred">منقولة</option>
+              </select>
+            </div>
+
+            <div class="select-dropdown-wrap">
+              <select id="filter-priority-select" onchange="filterOrdersByPriority(this.value)">
+                <option value="all" data-i18n="priorityFilterAll">كل الأولويات</option>
+                <option value="urgent" data-i18n="priorityUrgent">🔴 عاجل</option>
+                <option value="normal" data-i18n="priorityNormal">🔵 عادي</option>
+                <option value="low" data-i18n="priorityLow">⚪ منخفض</option>
+              </select>
+            </div>
+
+            <button class="btn btn-teal-add" onclick="toggleAddOrderModal(true)">
+              <span>+</span> <span data-i18n="addNewTask">إضافة مهمة جديدة</span>
+            </button>
+            <button class="btn btn-secondary" onclick="ftExportWorkOrdersCSV()" data-i18n="btnExportCsv">📊 تصدير Excel / CSV</button>
+          </div>
+        </div>
+
+        <div class="table-responsive">
+          <table class="data-table">
+            <thead>
+              <tr>
+                <th width="40"><input type="checkbox" id="select-all-tickets" onchange="toggleSelectAll(this)"></th>
+                <th data-i18n="thTaskId">رقم المهمة</th>
+                <th data-i18n="thCustomer">العنوان / العميل</th>
+                <th data-i18n="thStatus">الحالة</th>
+                <th data-i18n="thPriority">الأولوية</th>
+                <th data-i18n="thAssignedTo">المسند إليه</th>
+                <th data-i18n="thDeadline">الموعد النهائي</th>
+                <th data-i18n="thActions">الإجراءات</th>
+              </tr>
+            </thead>
+            <tbody id="orders-list"></tbody>
+          </table>
+        </div>
+
+        <div class="table-footer-bar">
+          <button class="btn-footer-action btn-move" onclick="openTransferModal()"><span data-i18n="btnTransferSelected">🔄 نقل المهام</span></button>
+          <button class="btn-footer-action btn-delete-red" onclick="deleteSelectedTickets()"><span data-i18n="btnDeleteSelected">🗑️ حذف المحدد</span></button>
+        </div>
+      </section>
+    </div>
+
+    <!-- 2. صفحة المهام النشطة Active Tasks -->
+    <div id="view-active-tasks" class="app-view hidden">
+      <section class="card card-tech-bg">
+        <h2 data-i18n="activeTasksTitle">📋 المهام النشطة (In Progress)</h2>
+        <p style="color: var(--text-muted); margin-top: 6px;" data-i18n="activeTasksDesc">عرض إداري لجميع المهام التي يتم العمل عليها حالياً في الميدان.</p>
+        <div class="table-responsive" style="margin-top: 15px;">
+          <table class="data-table">
+            <thead>
+              <tr>
+                <th data-i18n="thTaskId">رقم المهمة</th>
+                <th data-i18n="thCustomer">العنوان</th>
+                <th data-i18n="thPriority">الأولوية</th>
+                <th data-i18n="thAssignedTo">المسند إليه</th>
+                <th data-i18n="thDeadline">الموعد النهائي</th>
+                <th data-i18n="thActions">الإجراءات</th>
+              </tr>
+            </thead>
+            <tbody id="active-tasks-list"></tbody>
+          </table>
+        </div>
+      </section>
+    </div>
+
+    <!-- 2.0.1 صفحة جدولة/تقويم المهام Calendar -->
+    <div id="view-calendar" class="app-view hidden">
+      <section class="card card-tech-bg">
+        <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:10px;">
+          <h2 data-i18n="calendarTitle">🗓️ جدولة وتقويم المهام</h2>
+          <button class="btn btn-secondary" onclick="renderCalendarPage()"><span data-i18n="btnRefresh">🔄 تحديث</span></button>
+        </div>
+        <p style="color: var(--text-muted); margin-top:6px;" data-i18n="calendarDesc">تنظيم المهام حسب التاريخ لمعرفة عدد المهام باليوم لكل فني والتخطيط الأسبوعي/الشهري.</p>
+
+        <div class="ft-calendar-toolbar">
+          <div class="ft-calendar-nav-group">
+            <button type="button" class="btn btn-secondary" onclick="ftCalendarNav(-1)">◀</button>
+            <button type="button" class="btn btn-secondary" onclick="ftCalendarNav(0)" data-i18n="calendarToday">اليوم</button>
+            <button type="button" class="btn btn-secondary" onclick="ftCalendarNav(1)">▶</button>
+            <span id="ft-calendar-period-label" class="ft-calendar-period-label">—</span>
+          </div>
+
+          <div class="ft-calendar-nav-group">
+            <div class="ft-calendar-mode-switch">
+              <button type="button" id="ft-calendar-mode-week" class="btn btn-secondary" onclick="ftCalendarSetMode('week')" data-i18n="calendarWeekView">أسبوعي</button>
+              <button type="button" id="ft-calendar-mode-month" class="btn btn-teal-add" onclick="ftCalendarSetMode('month')" data-i18n="calendarMonthView">شهري</button>
+            </div>
+            <div class="select-dropdown-wrap">
+              <select id="ft-calendar-tech-filter" onchange="renderCalendarPage()">
+                <option value="all" data-i18n="calendarAllTechs">كل الفنيين</option>
+              </select>
+            </div>
+          </div>
+        </div>
+
+        <div class="ft-calendar-legend">
+          <span><span class="ft-priority-dot urgent"></span> <span data-i18n="priorityUrgent">🔴 عاجل</span></span>
+          <span><span class="ft-priority-dot normal"></span> <span data-i18n="priorityNormal">🔵 عادي</span></span>
+          <span><span class="ft-priority-dot low"></span> <span data-i18n="priorityLow">⚪ منخفض</span></span>
+        </div>
+
+        <div id="ft-calendar-weekday-header" class="ft-calendar-weekday-header"></div>
+        <div id="ft-calendar-grid" class="ft-calendar-grid month-mode"></div>
+      </section>
+
+      <section id="ft-calendar-day-detail" class="card card-server-bg hidden">
+        <div style="display:flex; justify-content:space-between; align-items:center;">
+          <h3 id="ft-calendar-day-detail-title" data-i18n="calendarDayDetailTitle">مهام هذا اليوم</h3>
+          <button class="btn btn-secondary" onclick="ftCloseCalendarDayDetail()" data-i18n="btnClose">✖ إغلاق</button>
+        </div>
+        <div id="ft-calendar-day-tech-summary" class="ft-calendar-tech-summary"></div>
+        <div class="table-responsive" style="margin-top:12px;">
+          <table class="data-table">
+            <thead>
+              <tr>
+                <th data-i18n="thTaskId">رقم المهمة</th>
+                <th data-i18n="thCustomer">العنوان</th>
+                <th data-i18n="thPriority">الأولوية</th>
+                <th data-i18n="thAssignedTo">المسند إليه</th>
+                <th data-i18n="thStatus">الحالة</th>
+                <th data-i18n="thActions">إجراءات</th>
+              </tr>
+            </thead>
+            <tbody id="ft-calendar-day-detail-list"></tbody>
+          </table>
+        </div>
+      </section>
+    </div>
+
+    <!-- 2.1 صفحة جدول العملاء Clients Table -->
+    <div id="view-clients" class="app-view hidden">
+      <section class="card card-network-bg">
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px; flex-wrap: wrap; gap: 10px;">
+          <h2 data-i18n="clientsPageTitle">👥 جدول العملاء ومعلوماتهم التفصيلية</h2>
+          <button class="btn btn-secondary" onclick="renderClientsPage()"><span data-i18n="btnRefresh">🔄 تحديث الجدول</span></button>
+        </div>
+        <p style="color: var(--text-muted); margin-bottom: 16px;" data-i18n="clientsPageDesc">عرض شامل لكافة العملاء والمشتركين مع تفاصيل المكان، المشرف، نوع الخدمة، والملاحظات المرفقة.</p>
+        
+        <div class="table-responsive">
+          <table class="data-table">
+            <thead>
+              <tr>
+                <th data-i18n="thClientName">اسم العميل / المشترك</th>
+                <th data-i18n="thPhone">رقم الهاتف</th>
+                <th data-i18n="thAddress">العنوان / الموقع</th>
+                <th data-i18n="thTechnician">المشرف / الفني</th>
+                <th data-i18n="thServiceType">نوع الخدمة</th>
+                <th data-i18n="thStatus">الحالة</th>
+                <th data-i18n="thDeadline">الموعد النهائي</th>
+                <th data-i18n="thNotes">الملاحظات</th>
+                <th data-i18n="thActions">إجراء</th>
+              </tr>
+            </thead>
+            <tbody id="clients-table-list"></tbody>
+          </table>
+        </div>
+      </section>
+    </div>
+
+    <!-- 2.5 صفحة المهام المنقولة Transferred Tasks -->
+    <div id="view-transferred-tasks" class="app-view hidden">
+      <section class="card card-server-bg">
+        <h2 data-i18n="transferredTasksTitle">🔄 المهام المنقولة (Transferred Tasks)</h2>
+        <p style="color: var(--text-muted); margin-top: 6px;" data-i18n="transferredTasksDesc">سجل المهام التي تم نقل مسؤولية إنجازها إلى فنيين آخرين.</p>
+        <div class="table-responsive" style="margin-top: 15px;">
+          <table class="data-table">
+            <thead>
+              <tr>
+                <th data-i18n="thTaskId">رقم المهمة</th>
+                <th data-i18n="thCustomer">العنوان</th>
+                <th data-i18n="thOriginalTech">الفني الأصلي</th>
+                <th data-i18n="thTransferredTo">المنقول إليه</th>
+                <th data-i18n="thDeadline">الموعد النهائي</th>
+                <th data-i18n="thActions">إجراءات</th>
+              </tr>
+            </thead>
+            <tbody id="transferred-tasks-list"></tbody>
+          </table>
+        </div>
+      </section>
+    </div>
+
+    <!-- 2.6 صفحة الملاحظات المجمعة Task Notes Page -->
+    <div id="view-notes" class="app-view hidden">
+      <section class="card card-tech-bg">
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px;">
+          <h2 data-i18n="notesPageTitle">📝 سجل ملاحظات جميع المهام</h2>
+          <button class="btn btn-secondary" onclick="renderAllNotesPage()"><span data-i18n="btnRefresh">🔄 تحديث</span></button>
+        </div>
+        <p style="color: var(--text-muted); margin-bottom: 16px;" data-i18n="notesPageDesc">عرض شامل لكافة الملاحظات (الكتابية، الصوتية، الميديا) المضافة لكافة المهام مع إمكانية الدخول المباشر للمهمة.</p>
+        
+        <div id="all-notes-container" style="display: flex; flex-direction: column; gap: 14px;"></div>
+      </section>
+    </div>
+
+    <!-- 3. صفحة السجل History -->
+    <div id="view-history" class="app-view hidden">
+      <section class="card card-network-bg">
+        <h2 data-i18n="historyTitle">📜 سجل المهام المكتملة (History)</h2>
+        <p style="color: var(--text-muted); margin-top: 6px;" data-i18n="historyDesc">أرشيف الأعمال التي تم إنجازها وتسليمها بنجاح.</p>
+        <div class="table-responsive" style="margin-top: 15px;">
+          <table class="data-table">
+            <thead>
+              <tr>
+                <th data-i18n="thTaskId">رقم المهمة</th>
+                <th data-i18n="thCustomer">العنوان</th>
+                <th data-i18n="thAssignedTo">المسند إليه</th>
+                <th data-i18n="thCompletionStatus">حالة الإنجاز</th>
+                <th data-i18n="thDeadline">التاريخ</th>
+              </tr>
+            </thead>
+            <tbody id="history-tasks-list"></tbody>
+          </table>
+        </div>
+      </section>
+    </div>
+
+    <!-- 4. صفحة التقارير Reports -->
+    <div id="view-reports" class="app-view hidden">
+      <section class="card card-tech-bg">
+        <h2 data-i18n="reportsTitle">📈 تقارير الأداء الميداني</h2>
+        <p style="color: var(--text-muted); margin-bottom: 20px;" data-i18n="reportsDesc">ملخص العمليات ونسب الإنجاز اليومية والشهرية.</p>
+        
+        <div class="reports-grid">
+          <div class="report-box">
+            <h4 data-i18n="repCompleted">إجمالي المهام المنجزة</h4>
+            <span class="report-num" id="report-completed-count">0</span>
+          </div>
+          <div class="report-box">
+            <h4 data-i18n="repSuccessRate">نسبة النجاح العامة</h4>
+            <span class="report-num" id="report-success-rate">0%</span>
+          </div>
+          <div class="report-box"><h4 data-i18n="repOnHoldTrans">العمليات المعلقة/المنقولة</h4><span class="report-num" id="report-onhold-count">0</span></div>
+          <div class="report-box"><h4>متوسط تقييم العملاء</h4><span class="report-num" id="report-customer-rating">—</span></div>
+          <div class="report-box"><h4 title="يُحسب من الفرق بين وقت إنشاء التذكرة ووقت إغلاقها فعلياً (تحويل حالتها إلى مكتملة)، كمتوسط لكل التذاكر المكتملة">متوسط وقت إغلاق المهمة ℹ️</h4><span class="report-num" id="report-close-time">—</span></div>
+        </div>
+      </section>
+    </div>
+
+    <!-- تقييم أداء الفنيين -->
+    <div id="view-performance" class="app-view hidden"><section class="card card-tech-bg">
+      <h2>🏆 تقييم أداء الفنيين</h2><p style="color:var(--text-muted); margin:8px 0 18px;">نسبة الإنجاز، متوسط وقت إغلاق المهمة، تقييم العميل، وتوصية تلقائية للمكافآت أو تحسين الأداء.</p>
+      <button class="btn btn-secondary" style="margin-bottom:14px;" onclick="ftExportPerformanceCSV()" data-i18n="btnExportCsv">📊 تصدير Excel / CSV</button>
+      <div id="performance-summary" class="performance-summary"></div><div class="table-responsive"><table class="data-table"><thead><tr><th>الفني</th><th>المهام المنجزة</th><th>نسبة الإنجاز</th><th title="من وقت إنشاء التذكرة إلى وقت إغلاقها فعلياً">متوسط وقت الإغلاق ℹ️</th><th>تقييم العميل</th><th>التوصية</th></tr></thead><tbody id="technician-performance-list"></tbody></table></div>
+    </section></div>
+    <!-- إدارة مخزون العتاد -->
+    <div id="view-inventory" class="app-view hidden"><section class="card card-server-bg">
+      <h2>📦 إدارة مخزون العتاد</h2><p style="color:var(--text-muted); margin:8px 0 18px;">اربط الباركود بالمخزون الفعلي، وعند مسحه في المهمة يتم خصم الوحدة وربطها بالفني والتذكرة.</p>
+      <div id="inventory-summary" class="performance-summary"></div>
+      <form id="inventory-form" onsubmit="addInventoryItem(event)" class="inventory-form"><input id="inventory-barcode" required placeholder="باركود / الرقم التسلسلي"><select id="inventory-device-type"><option value="ONU/ONT">ONU/ONT</option><option value="Router">Router</option><option value="IPTV">IPTV</option><option value="Switch">Switch</option></select><input id="inventory-model" placeholder="الموديل (اختياري)"><button class="btn btn-teal-add" type="submit">➕ إضافة للمخزون</button></form>
+      <div class="table-responsive"><table class="data-table"><thead><tr><th>الباركود</th><th>النوع</th><th>الموديل</th><th>الحالة</th><th>المتاح</th><th>المهمة</th><th>الفني</th><th>الإجراءات</th></tr></thead><tbody id="inventory-list"></tbody></table></div>
+    </section></div>
+    <!-- 5. صفحة إدارة المهام Tasks -->
+    <div id="view-tasks" class="app-view hidden">
+      <section class="card card-server-bg">
+        <h2 data-i18n="allTasksTitle">📑 تفاصيل وإدارة جميع المهام</h2>
+        <div class="toolbar-actions" style="margin-top: 15px;">
+          <button class="btn btn-teal-add" onclick="toggleAddOrderModal(true)">+ <span data-i18n="btnCreateWorkOrder">إنشاء ورقة عمل</span></button>
+          <button class="btn btn-secondary" onclick="renderAllTasksPage()"><span data-i18n="btnRefresh">🔄 تحديث القائمة</span></button>
+        </div>
+        <div class="table-responsive" style="margin-top: 15px;">
+          <table class="data-table">
+            <thead>
+              <tr>
+                <th data-i18n="thTaskId">ID</th>
+                <th data-i18n="thCustomer">عنوان المهمة</th>
+                <th data-i18n="thServiceType">نوع الخدمة</th>
+                <th data-i18n="thStatus">الحالة</th>
+                <th data-i18n="thPriority">الأولوية</th>
+                <th data-i18n="thTechnician">الفني المسؤول</th>
+                <th data-i18n="thActions">تحكم</th>
+              </tr>
+            </thead>
+            <tbody id="all-tasks-list"></tbody>
+          </table>
+        </div>
+      </section>
+    </div>
+
+    <!-- 6. صفحة الإعدادات Settings -->
+    <div id="view-settings" class="app-view hidden">
+      <section class="card card-tech-bg">
+        <h2 data-i18n="settingsTitle">⚙️ إعدادات النظام والتطبيق</h2>
+        <div class="settings-list" style="margin-top: 20px;">
+          <div class="settings-item">
+            <div>
+              <strong data-i18n="autoSync">مزامنة البيانات تلقائياً</strong>
+              <p style="font-size: 0.85rem; color: var(--text-muted);" data-i18n="autoSyncDesc">رفع التغييرات فور الاتصال بالشبكة</p>
+            </div>
+            <input type="checkbox" checked style="width: auto;">
+          </div>
+          <hr class="separator">
+          <div class="settings-item">
+            <div>
+              <strong data-i18n="resetDB">إعادة تهيئة قاعدة البيانات المحلية</strong>
+              <p style="font-size: 0.85rem; color: var(--text-muted);" data-i18n="resetDBDesc">مسح البيانات المخزنة محلياً وإعادة تحميلها</p>
+            </div>
+            <button class="btn btn-danger" onclick="resetLocalDB()"><span data-i18n="btnResetDB">مسح وإعادة التهيئة</span></button>
+          </div>
+        </div>
+      </section>
+    </div>
+
+    <!-- Modal إضافة تذكرة/مهمة جديدة المحدث بكافة الحقول -->
+    <div id="add-order-modal" class="modal hidden">
+      <div class="modal-content card card-tech-bg">
+        <div class="section-header">
+          <h2 data-i18n="modalNewTaskTitle">➕ إنشاء ورقة عمل جديدة (ISP Task)</h2>
+        </div>
+        <form id="add-order-form" onsubmit="createNewWorkOrder(event)">
+          <div class="form-group">
+            <label data-i18n="labelCustName">عنوان المهمة / اسم المشترك:</label>
+            <input type="text" id="new-cust-name" required placeholder="مثال: شركة الهدى للتجارة">
+          </div>
+          
+          <div class="form-group">
+            <label data-i18n="labelPhone">رقم الهاتف:</label>
+            <input type="tel" id="new-cust-phone" required placeholder="مثال: 0590000000">
+          </div>
+
+          <div class="form-group">
+            <label data-i18n="labelAddress">العنوان / المكان التفصيلي:</label>
+            <input type="text" id="new-cust-address-text" required placeholder="مثال: رام الله - مركز المدينة">
+          </div>
+
+          <div class="form-group">
+            <label data-i18n="labelAssignedTech">المشرف / الفني المسند إليه (Assigned To):</label>
+            <input type="text" id="new-assigned-tech" list="existing-techs-list" placeholder="اكتب اسم الفني بيدك أو اختر من القائمة..." required autocomplete="off">
+            <datalist id="existing-techs-list"></datalist>
+            <button type="button" class="btn btn-secondary" style="margin-top:8px; font-size:0.85rem; padding:8px 12px;" onclick="ftSuggestNearestTechnician()" data-i18n="btnSuggestNearestTech">📍 اقتراح أقرب فني متاح</button>
+            <div id="nearest-tech-status-note" style="font-size:0.8rem; color:var(--text-muted); margin-top:6px; min-height:16px;"></div>
+            <div id="nearest-tech-suggestions" class="ft-nearest-tech-list"></div>
+          </div>
+
+          <div class="form-group">
+            <label data-i18n="labelServiceType">نوع الخدمة (حسب تخصص الشركة - FiberTech):</label>
+            <select id="new-service-type">
+              <option value="تركيب خدمة جديد (FTTH - ألياف ضوئية)">تركيب خدمة جديد (FTTH - ألياف ضوئية)</option>
+              <option value="صيانة وإصلاح ألياف ضوئية (FTTH Repair)">صيانة وإصلاح ألياف ضوئية (FTTH Repair)</option>
+              <option value="استبدال عتاد / راوتر (Router Replacement)">استبدال عتاد / راوتر (Router Replacement)</option>
+              <option value="تركيب وإصلاح IPTV">تركيب وإصلاح IPTV</option>
+              <option value="صيانة شبكات وسويتشات (Switch Maintenance)">صيانة شبكات وسويتشات (Switch Maintenance)</option>
+              <option value="فحص إشارة وتدقيق ميداني (Signal Inspection)">فحص إشارة وتدقيق ميداني (Signal Inspection)</option>
+            </select>
+          </div>
+
+          <div class="form-group">
+            <label data-i18n="labelStatus">حالة التذكرة:</label>
+            <select id="new-ticket-status">
+              <option value="pending" selected data-i18n="filterPending">قيد التنفيذ</option>
+              <option value="completed" data-i18n="filterCompleted">مكتملة</option>
+              <option value="on_hold" data-i18n="filterOnhold">معلقة</option>
+            </select>
+          </div>
+
+          <div class="form-group">
+            <label data-i18n="labelDeadline">تاريخ الموعد النهائي (Deadline):</label>
+            <input type="date" id="new-deadline" required>
+          </div>
+
+          <div class="form-group">
+            <label data-i18n="labelPriority">أولوية المهمة (Priority):</label>
+            <select id="new-priority">
+              <option value="urgent" data-i18n="priorityUrgent">🔴 عاجل</option>
+              <option value="normal" selected data-i18n="priorityNormal">🔵 عادي</option>
+              <option value="low" data-i18n="priorityLow">⚪ منخفض</option>
+            </select>
+          </div>
+
+          <div class="modal-actions">
+            <button type="submit" class="btn btn-success" style="flex: 1;" data-i18n="btnAddTask">إضافة المهمة</button>
+            <button type="button" class="btn btn-secondary" style="flex: 1;" onclick="toggleAddOrderModal(false)" data-i18n="btnCancel">إلغاء</button>
+          </div>
+        </form>
+      </div>
+    </div>
+
+    <!-- Modal نقل المهام لفني آخر -->
+    <div id="transfer-order-modal" class="modal hidden">
+      <div class="modal-content card card-tech-bg">
+        <div class="section-header">
+          <h2><span data-i18n="modalTransferTitle">🔄 نقل المهام المحددة</span> (<span id="transfer-count-badge">0</span>)</h2>
+        </div>
+        <form id="transfer-order-form" onsubmit="confirmTransferTasks(event)">
+          <div class="form-group">
+            <label data-i18n="labelSelectTech">اختر الفني الموكل بالمهام:</label>
+            <select id="transfer-tech-select"></select>
+          </div>
+          <div class="form-group">
+            <label data-i18n="labelNewTechCustom">أو اكتب اسم فني جديد (اختياري):</label>
+            <input type="text" id="transfer-tech-custom" placeholder="مثال: فني ميداني جديد...">
+          </div>
+          <div class="modal-actions" style="display: flex; gap: 10px; margin-top: 15px;">
+            <button type="submit" class="btn btn-primary" style="flex: 1;" data-i18n="btnConfirmTransfer">تأكيد النقل</button>
+            <button type="button" class="btn btn-secondary" style="flex: 1;" onclick="toggleTransferModal(false)" data-i18n="btnCancel">إلغاء</button>
+          </div>
+        </form>
+      </div>
+    </div>
+
+    <!-- تعديل عنصر من مخزون العتاد -->
+    <div id="edit-inventory-modal" class="modal hidden">
+      <div class="modal-content card card-server-bg">
+        <div class="section-header">
+          <h2>✏️ تعديل عنصر المخزون</h2>
+        </div>
+        <form id="edit-inventory-form" onsubmit="confirmEditInventoryItem(event)">
+          <input type="hidden" id="edit-inventory-id">
+          <div class="form-group">
+            <label>الباركود / الرقم التسلسلي:</label>
+            <input type="text" id="edit-inventory-barcode" required>
+          </div>
+          <div class="form-group">
+            <label>نوع الجهاز:</label>
+            <select id="edit-inventory-device-type">
+              <option value="ONU/ONT">ONU/ONT</option>
+              <option value="Router">Router</option>
+              <option value="IPTV">IPTV</option>
+              <option value="Switch">Switch</option>
+            </select>
+          </div>
+          <div class="form-group">
+            <label>الموديل (اختياري):</label>
+            <input type="text" id="edit-inventory-model">
+          </div>
+          <div class="form-group">
+            <label>الحالة:</label>
+            <select id="edit-inventory-status" onchange="toggleEditInventoryAssignFields(this.value)">
+              <option value="available">⚪ متاح بالمخزون</option>
+              <option value="assigned">🔵 موزّع على مهمة</option>
+            </select>
+          </div>
+          <div id="edit-inventory-assign-fields">
+            <div class="form-group">
+              <label>رقم المهمة المرتبطة (اختياري):</label>
+              <input type="number" id="edit-inventory-workorder">
+            </div>
+            <div class="form-group">
+              <label>الفني المسؤول (اختياري):</label>
+              <input type="text" id="edit-inventory-tech">
+            </div>
+          </div>
+          <div class="modal-actions" style="display: flex; gap: 10px; margin-top: 15px;">
+            <button type="submit" class="btn btn-primary" style="flex: 1;">💾 حفظ التعديلات</button>
+            <button type="button" class="btn btn-secondary" style="flex: 1;" onclick="toggleEditInventoryModal(false)">إلغاء</button>
+          </div>
+        </form>
+      </div>
+    </div>
+
+    <!-- قسم تفاصيل التذكرة والتوثيق الميداني المفتوح -->
+    <section id="ticket-details-section" class="card card-tech-bg hidden">
+      <button class="btn-back" onclick="closeTicketDetails()"><span data-i18n="btnBackList">⬅ العودة للقائمة</span></button>
+      <h2 id="ticket-title" style="margin-bottom: 16px; color: var(--teal-main);" data-i18n="ticketDetails">تفاصيل التذكرة</h2>
+      
+      <div class="subscriber-info" id="subscriber-info"></div>
+
+      <hr class="separator">
+
+      <!-- إضافة الملاحظات الميدانية للمهمة (نصية / تسجبل صوتي / صور وفيديو) -->
+      <div class="form-group notes-section-box">
+        <h3 data-i18n="notesHeader">📝 ملاحظات المهمة (نص، صوت، صورة أو فيديو)</h3>
+        
+        <!-- ملاحظة كتابية -->
+        <div style="display: flex; gap: 8px; margin-top: 10px;">
+          <input type="text" id="task-note-text" placeholder="اكتب ملاحظة جديدة..." style="flex: 1;">
+          <button class="btn btn-primary" onclick="addTextNote()"><span data-i18n="btnAddNote">إضافة ➕</span></button>
+        </div>
+
+        <!-- خيارات التسجيل وإرفاق الميديا -->
+        <div style="display: flex; gap: 10px; margin-top: 10px; flex-wrap: wrap;">
+          <button id="btn-start-record" class="btn btn-secondary" onclick="startAudioRecording()"><span data-i18n="btnRecordAudio">🎙️ تسجيل صوتي</span></button>
+          <button id="btn-stop-record" class="btn btn-danger hidden" onclick="stopAudioRecording()"><span data-i18n="btnStopRecord">⏹️ إيقاف التسجيل</span></button>
+          <span id="recording-status" class="hidden" style="color:red; font-size:0.85rem; display:flex; align-items:center; gap:4px;">
+            🔴 <span data-i18n="recordingText">جاري التسجيل...</span> (<span id="record-timer">00:00</span>)
+          </span>
+
+          <label class="btn btn-secondary" style="cursor: pointer; display: inline-block;">
+            <span data-i18n="btnAttachMedia">📎 إرفاق صورة / فيديو</span>
+            <input type="file" accept="image/*,video/*" capture="environment" style="display: none;" onchange="handleMediaFileUpload(event)">
+          </label>
+        </div>
+
+        <!-- قائمة عرض الملاحظات الخاصة بهذه المهمة -->
+        <div id="task-notes-list" style="margin-top: 14px;"></div>
+      </div>
+
+      <hr class="separator">
+
+      <!-- توثيق مسح باركود العتاد -->
+      <div class="form-group scanner-box">
+        <h3 data-i18n="hardwareScanTitle">📦 توثيق مسح باركود/QR للعتاد (Hardware Scan)</h3>
+        <label for="device-type" data-i18n="labelDeviceType">نوع الجهاز:</label>
+        <select id="device-type">
+          <option value="ONU/ONT">جهاز ألياف ضوئية (ONU/ONT)</option>
+          <option value="Router">راوتر (Router)</option>
+          <option value="IPTV">ريسيفر IPTV</option>
+          <option value="Switch">سويتش شبكي (Switch)</option>
+        </select>
+
+        <div id="qr-reader" class="qr-camera-container" style="margin-top: 10px;"></div>
+        <div id="barcode-scanner-error" class="field-camera-error hidden"></div>
+
+        <div class="action-buttons-group" style="margin-top: 10px;">
+          <button class="btn btn-primary" onclick="startBarcodeScanner()"><span data-i18n="btnStartCam">📷 فتح الكاميرا للمسح</span></button>
+          <button id="btn-stop-scanner" class="btn btn-danger hidden" onclick="stopBarcodeScanner()"><span data-i18n="btnStopCam">⏹ إيقاف الكاميرا</span></button>
+          <label class="btn btn-secondary" style="cursor: pointer; display: inline-flex; align-items: center; justify-content: center;">
+            <span data-i18n="btnImportBarcodeImage">📁 استيراد صورة الباركود</span>
+            <input type="file" id="barcode-image-input" accept="image/*" style="display: none;" onchange="handleBarcodeImageImport(event)">
+          </label>
+        </div>
+        <div id="barcode-import-status" class="hidden" style="margin-top: 8px; font-size: 0.85rem;"></div>
+        
+        <div class="scanned-result-display" style="margin-top: 10px;"><span data-i18n="serialLabel">الرقم التسلسلي (S/N):</span> <strong id="scanned-serial-text" style="color: var(--teal-main);">لم يتم المسح بعد</strong></div>
+        <div id="inventory-scan-status" class="inventory-scan-status">سيتم التحقق من الباركود في المخزون وربط العتاد بالمهمة تلقائياً.</div>
+      </div>
+
+      <hr class="separator">
+
+      <!-- فحص الإشارة الضوئية الميدانية -->
+      <div class="form-group">
+        <h3 data-i18n="signalTitle">⚡ فحص الإشارة الضوئية (Optical Signal Check)</h3>
+        <label for="signal-input" data-i18n="labelSignalInput">إدخال قيمة الإشارة الميدانية (dBm-):</label>
+        <input type="number" step="0.1" id="signal-input" placeholder="مثال: -20" oninput="checkOpticalSignal()">
+        
+        <div id="signal-result-box" class="signal-box hidden" style="margin-top: 10px; padding: 10px; border-radius: 6px;">
+          <div id="signal-status-badge" style="font-size: 1.05rem; font-weight: bold; margin-bottom: 4px;"></div>
+          <p id="signal-status-message" style="font-size: 0.88rem; font-weight: normal;"></p>
+        </div>
+      </div>
+
+      <hr class="separator">
+
+      <!-- التقاط الصور والتوقيع الرقمي -->
+      <div class="form-group">
+        <h3 data-i18n="fieldPhotosTitle">📸 التقاط الصور الميدانية (الكابلات ومكان التركيب)</h3>
+        <div class="photo-capture-buttons-row">
+          <button type="button" class="btn btn-primary photo-capture-btn" onclick="openFieldCameraCapture()">
+            <span data-i18n="btnTakePhoto">📷 التقاط صورة جديدة</span>
+          </button>
+          <label class="btn btn-outline photo-capture-btn" style="cursor: pointer; text-align: center; border: 1px dashed var(--teal-main); display: inline-flex; align-items: center; justify-content: center;">
+            <span data-i18n="btnAttachPhotoGallery">🖼️ إرفاق صورة من المعرض</span>
+            <input type="file" id="camera-input" accept="image/*" style="display: none;" onchange="handleImageCapture(event)">
+          </label>
+        </div>
+        <div id="image-preview-container" class="image-preview-container" style="display: flex; gap: 8px; margin-top: 10px; flex-wrap: wrap;"></div>
+      </div>
+
+      <!-- نافذة التقاط صورة مباشرة عبر الكاميرا الحية (تعمل على الجوال وأجهزة الكمبيوتر) -->
+      <div id="field-camera-modal" class="modal hidden">
+        <div class="modal-content field-camera-modal-content">
+          <h3 style="margin-bottom: 10px; color: var(--teal-main);" data-i18n="btnTakePhoto">📷 التقاط صورة جديدة</h3>
+          <div class="field-camera-video-wrap">
+            <video id="field-camera-video" class="field-camera-video" autoplay playsinline muted></video>
+          </div>
+          <canvas id="field-camera-canvas" class="hidden"></canvas>
+          <div id="field-camera-error" class="field-camera-error hidden" role="alert"></div>
+          <div class="field-camera-actions">
+            <button type="button" class="btn btn-success" onclick="captureFieldPhoto()"><span data-i18n="btnCaptureNow">📸 تصوير الآن</span></button>
+            <button type="button" class="btn btn-secondary" onclick="switchFieldCamera()"><span data-i18n="btnSwitchCamera">🔄 تبديل الكاميرا</span></button>
+            <button type="button" class="btn btn-danger" onclick="closeFieldCameraCapture()"><span data-i18n="btnClose">✖ إغلاق</span></button>
+          </div>
+        </div>
+      </div>
+
+      <div class="form-group">
+        <h3 data-i18n="sigTitle">✍️ توقيع المشترك الرقمي</h3>
+        <div class="signature-container" style="border: 1px solid var(--border-color); border-radius: 6px; background: #fff;">
+          <canvas id="signature-pad"></canvas>
+        </div>
+        <button class="btn btn-secondary" style="width: auto; padding: 6px 14px; font-size: 0.82rem; margin-top: 8px;" onclick="clearSignature()"><span data-i18n="btnClearSig">🗑️ مسح التوقيع وإعادته</span></button>
+      </div>
+
+      <hr class="separator">
+
+      <!-- اختيار حالة التذكرة عند الحفظ -->
+      <div class="form-group">
+        <h3 data-i18n="ticketStatusSaveTitle">📌 حالة التذكرة عند الحفظ</h3>
+        <select id="ticket-status-select">
+          <option value="pending" data-i18n="filterPending">قيد التنفيذ</option>
+          <option value="completed" data-i18n="filterCompleted">مكتملة</option>
+          <option value="on_hold" data-i18n="filterOnhold">معلقة</option>
+          <option value="transferred" data-i18n="filterTransferred">منقولة</option>
+        </select>
+      </div>
+
+      <hr class="separator">
+      <div class="form-group customer-rating-box"><h3>⭐ تقييم العميل للخدمة</h3><select id="customer-rating"><option value="">لم يتم التقييم بعد</option><option value="5">⭐⭐⭐⭐⭐ ممتاز (5)</option><option value="4">⭐⭐⭐⭐ جيد جداً (4)</option><option value="3">⭐⭐⭐ جيد (3)</option><option value="2">⭐⭐ يحتاج تحسين (2)</option><option value="1">⭐ غير راضٍ (1)</option></select></div>
+      <!-- إغلاق وحفظ التذكرة -->
+      <button class="btn btn-success" style="font-size: 1.05rem; padding: 14px; width: 100%;" onclick="submitTicket()"><span data-i18n="btnSaveTask">💾 حفظ وإغلاق المهمة</span></button>
+      <button id="btn-export-pdf" class="btn btn-primary" style="font-size: 1.05rem; padding: 14px; width: 100%; margin-top: 8px;" onclick="exportTicketReportPDF()">🧾 تصدير تقرير / فاتورة PDF</button>
+      <button class="btn btn-danger" style="font-size: 1.05rem; padding: 14px; width: 100%; margin-top: 8px;" onclick="exitTicketWithoutSaving()"><span data-i18n="btnExitTask">🚪 خروج بدون حفظ</span></button>
+    </section>
+
+    <!-- 8.5 خريطة تتبع مواقع الفنيين المباشرة (للمسؤول فقط) -->
+    <div id="view-tech-map" class="app-view hidden">
+      <section class="card card-tech-bg">
+        <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:10px; margin-bottom:12px;">
+          <h2 style="color: var(--teal-main);">🗺️ خريطة تتبع الفنيين المباشرة</h2>
+          <button class="btn btn-secondary" onclick="renderTechMap()">🔄 تحديث الخريطة</button>
+        </div>
+        <p style="color: var(--text-muted); margin-bottom: 16px;">تعرض هذه الخريطة آخر موقع معروف لكل فني قام بتفعيل مشاركة موقعه من جهازه، ويتم تحديثها تلقائياً كل بضع ثوانٍ.</p>
+        <div id="tech-map" style="height:460px; border-radius:10px; overflow:hidden; border:1px solid var(--border-color);"></div>
+        <div id="tech-map-legend" style="margin-top:14px; display:flex; flex-direction:column; gap:8px;"></div>
+      </section>
+    </div>
+
+    <!-- 9. لوحة إدارة الموظفين (للمسؤول فقط) -->
+    <div id="view-employees" class="app-view hidden">
+      <section class="card card-tech-bg">
+        <div class="reports-grid" style="margin-bottom: 16px;">
+          <div class="report-box">
+            <span>إجمالي الموظفين</span>
+            <span id="ft-stat-emp-total" class="report-num">0</span>
+          </div>
+          <div class="report-box">
+            <span>نشطون الآن</span>
+            <span id="ft-stat-emp-active" class="report-num">0</span>
+          </div>
+          <div class="report-box">
+            <span>إجمالي المهام المستلمة</span>
+            <span id="ft-stat-emp-tasks" class="report-num">0</span>
+          </div>
+          <div class="report-box">
+            <span>أنجزوا مهامهم</span>
+            <span id="ft-stat-emp-done" class="report-num">0</span>
+          </div>
+        </div>
+      </section>
+
+      <section class="card card-network-bg">
+        <h2 style="margin-bottom: 14px; color: var(--teal-main);">➕ إضافة موظف جديد</h2>
+        <form id="ft-add-employee-form" onsubmit="ftHandleAddEmployee(event)">
+          <div class="form-group">
+            <label>اسم الموظف</label>
+            <input type="text" id="ft-new-emp-name" required placeholder="مثال: أحمد علي">
+          </div>
+          <div class="form-group">
+            <label>اسم المستخدم</label>
+            <input type="text" id="ft-new-emp-username" required placeholder="username">
+          </div>
+          <div class="form-group">
+            <label>كلمة المرور</label>
+            <input type="text" id="ft-new-emp-password" required placeholder="كلمة المرور">
+          </div>
+          <div class="form-group">
+            <label>الموقع / المنطقة المخصصة</label>
+            <input type="text" id="ft-new-emp-location" required placeholder="مثال: فرع الشمال">
+          </div>
+          <button type="submit" class="btn btn-teal-add">إضافة الموظف</button>
+        </form>
+      </section>
+
+      <section class="card card-server-bg">
+        <h2 style="margin-bottom: 14px; color: var(--teal-main);">📋 قائمة الموظفين</h2>
+        <div class="table-responsive">
+          <table class="data-table">
+            <thead>
+              <tr>
+                <th>اسم الموظف</th>
+                <th>اسم المستخدم</th>
+                <th>الموقع / المنطقة</th>
+                <th>عدد المهام</th>
+                <th>الحالة الحالية</th>
+                <th>آخر تحديث</th>
+                <th>إجراءات</th>
+              </tr>
+            </thead>
+            <tbody id="ft-employees-table-body"></tbody>
+          </table>
+        </div>
+      </section>
+    </div>
+
+    <!-- 9.5 صندوق الرسائل والطلبات (للمسؤول): استقبال ملاحظات/تحديثات/طلبات الموظفين وإرسال التعيينات والإشعارات -->
+    <div id="view-messages" class="app-view hidden">
+      <section class="card card-tech-bg">
+        <div class="reports-grid" style="margin-bottom: 16px;">
+          <div class="report-box">
+            <span>إجمالي الرسائل</span>
+            <span id="ft-stat-msg-total" class="report-num">0</span>
+          </div>
+          <div class="report-box">
+            <span>غير مقروءة</span>
+            <span id="ft-stat-msg-unread" class="report-num">0</span>
+          </div>
+          <div class="report-box">
+            <span>طلبات استلام مهام</span>
+            <span id="ft-stat-msg-requests" class="report-num">0</span>
+          </div>
+          <div class="report-box">
+            <span>طلبات تبديل مهام</span>
+            <span id="ft-stat-msg-transfers" class="report-num">0</span>
+          </div>
+        </div>
+      </section>
+
+      <section class="card card-network-bg">
+        <h2 style="margin-bottom: 14px; color: var(--teal-main);">📤 إرسال رسالة / إشعار إلى الموظفين</h2>
+        <form id="ft-msg-mgr-form" onsubmit="ftManagerSendMessage(event)">
+          <div class="form-group">
+            <label>إرسال إلى:</label>
+            <select id="ft-msg-mgr-to-select"></select>
+          </div>
+          <div class="form-group">
+            <label>نوع الرسالة:</label>
+            <select id="ft-msg-mgr-type-select">
+              <option value="assignment">📌 تعيين / تفاصيل مهمة</option>
+              <option value="update">📢 تحديث بخصوص مهمة</option>
+              <option value="broadcast">📣 إشعار عام</option>
+            </select>
+          </div>
+          <div class="form-group">
+            <label>ربط برقم مهمة (اختياري):</label>
+            <select id="ft-msg-mgr-task-select"></select>
+          </div>
+          <div class="form-group">
+            <label>نص الرسالة:</label>
+            <textarea id="ft-msg-mgr-content" rows="3" required placeholder="اكتب تفاصيل المهمة أو الإشعار هنا..."></textarea>
+          </div>
+
+          <!-- خيارات إرفاق صورة / فيديو / تسجيل صوتي مع الرسالة -->
+          <div class="form-group">
+            <label>إرفاق ملف (اختياري):</label>
+            <div style="display:flex; gap:10px; margin-top:6px; flex-wrap:wrap; align-items:center;">
+              <label class="btn btn-secondary" style="cursor:pointer; display:inline-block;">
+                <span>🖼️ إرفاق صورة</span>
+                <input type="file" accept="image/*" style="display:none;" onchange="ftHandleMgrMsgAttachment(event, 'image')">
+              </label>
+              <label class="btn btn-secondary" style="cursor:pointer; display:inline-block;">
+                <span>🎬 إرفاق فيديو</span>
+                <input type="file" accept="video/*" style="display:none;" onchange="ftHandleMgrMsgAttachment(event, 'video')">
+              </label>
+              <button type="button" id="ft-mgr-msg-record-btn" class="btn btn-secondary" onclick="ftToggleMgrMsgRecording()">🎙️ تسجيل صوتي</button>
+              <span id="ft-mgr-msg-record-status" class="hidden" style="color:red; font-size:0.8rem; display:flex; align-items:center; gap:4px;">
+                🔴 جاري التسجيل... (<span id="ft-mgr-msg-record-timer">00:00</span>)
+              </span>
+            </div>
+            <div id="ft-mgr-msg-attachment-preview" style="margin-top:8px;"></div>
+          </div>
+
+          <button type="submit" class="btn btn-teal-add">إرسال</button>
+        </form>
+      </section>
+
+      <section class="card card-server-bg">
+        <h2 style="margin-bottom: 14px; color: var(--teal-main);">📥 الرسائل والطلبات الواردة من الموظفين</h2>
+        <div id="ft-messages-inbox-list"></div>
+      </section>
+    </div>
+
+    <!-- 10. الملف الشخصي للموظف -->
+    <div id="view-profile" class="app-view hidden">
+      <section class="card card-tech-bg">
+        <div style="display:flex; align-items:center; justify-content:space-between; flex-wrap:wrap; gap:12px;">
+          <div>
+            <h2 id="ft-profile-name" style="color: var(--teal-main);">—</h2>
+            <p style="color: var(--text-muted); font-size:0.85rem; margin-top:4px;" data-i18n="profileMyLocationLabel">موقعك المخصص</p>
+          </div>
+          <div id="ft-profile-location" class="ft-loc-badge">—</div>
+        </div>
+        <div style="margin-top:14px; display:flex; align-items:center; gap:12px; flex-wrap:wrap;">
+          <button type="button" id="ft-share-location-btn" class="btn btn-secondary" onclick="ftManualEnableLocationSharing()" data-i18n="btnEnableLocationSharing">📍 تفعيل مشاركة موقعي مع المسؤول</button>
+          <span id="ft-location-status-note" style="font-size:0.8rem; color: var(--text-muted);"></span>
+        </div>
+      </section>
+
+      <!-- 🗂️ مهام الموظف: قائمة فرعية (مهامي الحالية / المهام المحولة إليّ / سجل مهامي المكتملة) -->
+      <section class="card card-tech-bg">
+        <h3 style="margin-bottom: 14px;" data-i18n="profileTasksTitle">🗂️ مهامي وتفاصيلها</h3>
+        <div id="ft-profile-tasks-subnav" style="display:flex; gap:8px; flex-wrap:wrap; margin-bottom:14px;">
+          <button type="button" class="btn btn-teal-add ft-profile-tasks-tab active" data-tab="assigned" onclick="ftSwitchProfileTasksTab('assigned', this)" data-i18n="tabMyCurrentTasks">📋 مهامي الحالية</button>
+          <button type="button" class="btn btn-secondary ft-profile-tasks-tab" data-tab="transferred" onclick="ftSwitchProfileTasksTab('transferred', this)" data-i18n="tabTransferredToMe">🔄 المهام المحولة لهذا المستخدم</button>
+          <button type="button" class="btn btn-secondary ft-profile-tasks-tab" data-tab="history" onclick="ftSwitchProfileTasksTab('history', this)" data-i18n="tabMyCompletedHistory">📜 سجل مهامي المكتملة</button>
+        </div>
+        <div class="ft-route-actions">
+          <button type="button" class="btn btn-teal-add" onclick="ftOpenTodayRouteGoogleMaps()" data-i18n="btnTodayRouteMaps">🗺️ فتح مسار اليوم (خرائط جوجل)</button>
+          <button type="button" class="btn btn-secondary" onclick="ftOpenTodayRouteWaze()" data-i18n="btnTodayRouteWaze">🚗 أقرب موقع (Waze)</button>
+        </div>
+        <div class="table-responsive">
+          <table class="data-table">
+            <thead>
+              <tr>
+                <th data-i18n="thTaskId">رقم المهمة</th>
+                <th data-i18n="thAddressClient">العنوان / العميل</th>
+                <th data-i18n="thServiceType">نوع الخدمة</th>
+                <th data-i18n="thStatusCol">الحالة</th>
+                <th data-i18n="thPriority">الأولوية</th>
+                <th data-i18n="thDeadlineDate">الموعد النهائي / التاريخ</th>
+                <th data-i18n="thActions">إجراءات</th>
+              </tr>
+            </thead>
+            <tbody id="ft-profile-tasks-list"></tbody>
+          </table>
+        </div>
+      </section>
+
+      <section class="card card-network-bg">
+        <h3 style="margin-bottom: 14px;" data-i18n="statusUpdateTitle">🔄 تحديث الحالة الحالية</h3>
+        <div id="ft-profile-status-grid" class="ft-status-grid"></div>
+      </section>
+
+      <section class="card card-server-bg">
+        <h3 style="margin-bottom: 14px;" data-i18n="receivedTasksCountTitle">🧾 عدد المهام المستلمة</h3>
+        <div class="ft-counter-row">
+          <button type="button" class="ft-counter-btn" onclick="ftCounterChange(-1)">−</button>
+          <div id="ft-profile-counter" class="ft-counter-display">0</div>
+          <button type="button" class="ft-counter-btn" onclick="ftCounterChange(1)">+</button>
+        </div>
+        <button type="button" class="btn btn-success" style="width:100%; margin-top:16px; padding:12px;" onclick="ftSaveProfileUpdate()" data-i18n="btnSaveUpdate">حفظ التحديث</button>
+        <div id="ft-profile-save-note" style="margin-top:8px; font-size:0.85rem; color: var(--status-completed-bg); font-weight:700; min-height:18px;"></div>
+      </section>
+
+      <!-- الرسائل الواردة من المسؤول (تعيينات مهام، تحديثات، إشعارات عامة) -->
+      <section class="card card-network-bg">
+        <h3 style="margin-bottom: 14px;" data-i18n="inboxTitle">📥 الرسائل الواردة من المسؤول</h3>
+        <div id="ft-profile-inbox-list"></div>
+      </section>
+
+      <!-- إرسال ملاحظة / تحديث / طلب استلام أو تبديل مهمة إلى المسؤول -->
+      <section class="card card-server-bg">
+        <h3 style="margin-bottom: 14px;" data-i18n="sendMsgTitle">📤 إرسال ملاحظة أو طلب إلى المسؤول</h3>
+        <form id="ft-msg-emp-form" onsubmit="ftEmployeeSendMessage(event)">
+          <div class="form-group">
+            <label data-i18n="msgTypeLabel">نوع الرسالة:</label>
+            <select id="ft-msg-emp-type-select" onchange="ftToggleEmployeeMsgFields(this.value)">
+              <option value="note" data-i18n="msgTypeNote">📝 ملاحظة عامة</option>
+              <option value="task_update" data-i18n="msgTypeTaskUpdate">🔧 تحديث عن مهمة</option>
+              <option value="task_request" data-i18n="msgTypeTaskRequest">🙋 طلب استلام مهمة</option>
+              <option value="transfer_request" data-i18n="msgTypeTransferRequest">🔄 طلب تبديل مهمة مع زميل</option>
+            </select>
+          </div>
+          <div class="form-group">
+            <label data-i18n="linkTaskLabel">ربط بمهمة (اختياري):</label>
+            <select id="ft-msg-emp-task-select"></select>
+          </div>
+          <div class="form-group hidden" id="ft-msg-emp-transfer-wrap">
+            <label data-i18n="transferColleagueLabel">تبديل المهمة مع الزميل:</label>
+            <select id="ft-msg-emp-transfer-select"></select>
+          </div>
+          <div class="form-group">
+            <label data-i18n="msgContentLabel">نص الرسالة:</label>
+            <textarea id="ft-msg-emp-content" rows="3" required placeholder="اكتب ملاحظتك أو طلبك هنا..." data-i18n-placeholder="msgContentPlaceholder"></textarea>
+          </div>
+          <button type="submit" class="btn btn-teal-add" style="width:100%; padding:12px;" data-i18n="btnSendToManager">إرسال إلى المسؤول</button>
+          <div id="ft-msg-emp-sent-note" style="margin-top:8px; font-size:0.85rem; color: var(--status-completed-bg); font-weight:700; min-height:18px;"></div>
+        </form>
+      </section>
+    </div>
+
+  </main>
+
+  </div><!-- /#ft-app-wrapper -->
+
+  <script src="app.js"></script>
+</body>
+</html>

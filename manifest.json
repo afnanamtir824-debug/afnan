@@ -1,0 +1,55 @@
+{
+  "id": "com.fieldtech.pwa",
+  "short_name": "FieldTech",
+  "name": "تطبيق الفنيين الميدانيين للتركيبات والصيانة",
+  "description": "تطبيق ميداني يعمل بدون إنترنت لإدارة تذاكر الصيانة والتركيب، مسح الباركود، وفحص الإشارة الضوئية",
+  "lang": "ar",
+  "dir": "rtl",
+  "start_url": "./index.html",
+  "scope": "./",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#0f172a",
+  "theme_color": "#2563eb",
+  "categories": ["utilities", "productivity", "business"],
+  "icons": [
+    {
+      "src": "./icons/icon-192.png",
+      "type": "image/png",
+      "sizes": "192x192",
+      "purpose": "any"
+    },
+    {
+      "src": "./icons/icon-192-maskable.png",
+      "type": "image/png",
+      "sizes": "192x192",
+      "purpose": "maskable"
+    },
+    {
+      "src": "./icons/icon-512.png",
+      "type": "image/png",
+      "sizes": "512x512",
+      "purpose": "any"
+    },
+    {
+      "src": "./icons/icon-512-maskable.png",
+      "type": "image/png",
+      "sizes": "512x512",
+      "purpose": "maskable"
+    }
+  ],
+  "shortcuts": [
+    {
+      "name": "أوراق العمل",
+      "short_name": "التذاكر",
+      "description": "عرض قائمة أوراق العمل والتذاكر المسندة",
+      "url": "./index.html#work-orders-section",
+      "icons": [
+        {
+          "src": "./icons/icon-192.png",
+          "sizes": "192x192"
+        }
+      ]
+    }
+  ]
+}
