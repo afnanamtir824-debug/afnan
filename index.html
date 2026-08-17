@@ -925,6 +925,18 @@
             <label>الموقع / المنطقة المخصصة</label>
             <input type="text" id="ft-new-emp-location" required placeholder="مثال: فرع الشمال">
           </div>
+          <div class="form-group">
+            <label>الدور</label>
+            <select id="ft-new-emp-role">
+              <option value="technician" selected>فني</option>
+              <option value="supervisor">مشرف</option>
+              <option value="admin">مدير</option>
+            </select>
+          </div>
+          <div class="form-group">
+            <label>الفريق / المنطقة (team) — مطلوب لدور المشرف والفني</label>
+            <input type="text" id="ft-new-emp-team" placeholder="مثال: team-north">
+          </div>
           <button type="submit" class="btn btn-teal-add">إضافة الموظف</button>
         </form>
       </section>
@@ -937,10 +949,11 @@
               <tr>
                 <th>اسم الموظف</th>
                 <th>اسم المستخدم</th>
+                <th>الدور</th>
+                <th>الفريق</th>
                 <th>الموقع / المنطقة</th>
                 <th>عدد المهام</th>
                 <th>الحالة الحالية</th>
-                <th>آخر تحديث</th>
                 <th>إجراءات</th>
               </tr>
             </thead>
