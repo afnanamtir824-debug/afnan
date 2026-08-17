@@ -428,10 +428,22 @@ function toggleAppLanguage() {
 
 // ==========================================
 // 0.6 نظام تسجيل الدخول وإدارة حسابات الموظفين (Auth + Employees)
-// يعتمد على LocalStorage بشكل منفصل عن قاعدة بيانات المهام (Dexie)
+// == تحديث أمني جوهري ==
+// قبل هذا التحديث: المستخدمون (بكلمات مرور نصية صريحة!) وتسجيل الدخول والصلاحيات
+// كانت كلها محلية بالكامل في المتصفح (localStorage) - أي شخص يفتح أدوات المطوّر
+// يقدر يعدّل role إلى 'manager' ويصير مديراً فوراً، والدوال على السيرفر (sync-pull/
+// sync-push) كانت لا تتحقق من أي شيء أصلاً.
+//
+// الآن: تسجيل الدخول يتم فعلياً على السيرفر (auth-login.mjs) الذي يتحقق من كلمة
+// المرور المشفّرة في قاعدة البيانات ويصدر توكن موقّع (JWT-like) لا يمكن تزويره من
+// المتصفح. كل طلب لاحق (سحب/دفع بيانات، إدارة مستخدمين) يرسل هذا التوكن، والسيرفر
+// هو من يقرر الصلاحية فعلياً - وليس ما يظهر في localStorage.
+// localStorage الآن هو فقط "كاش" محلي لتشغيل أوفلاين، وليس مصدر الحقيقة.
 // ==========================================
-const FT_USERS_KEY = 'ft_users_v1';
-const FT_SESSION_KEY = 'ft_session_v1';
+const FT_USERS_CACHE_KEY = 'ft_users_cache_v2'; // كاش محلي فقط (offline) - ليس مصدر الحقيقة
+const FT_SESSION_KEY = 'ft_session_v2'; // { token, user: {id, username, name, role, teamId} }
+const FT_MIGRATED_FLAG_KEY = 'ft_migrated_v2';
+const FT_LEGACY_USERS_KEY = 'ft_users_v1'; // مفتاح النظام القديم (قبل السيرفر) - يُقرأ مرة واحدة فقط للترحيل
 
 const FT_STATUS_OPTIONS = [
   { id: 'active', label: 'نشط في الموقع', cls: 'active' },
@@ -440,29 +452,20 @@ const FT_STATUS_OPTIONS = [
   { id: 'off', label: 'غير متصل', cls: 'off' },
 ];
 
+const FT_ROLE_LABELS = {
+  admin: 'مدير',
+  supervisor: 'مشرف',
+  technician: 'فني',
+};
+
 function ftStatusMeta(id) {
   return FT_STATUS_OPTIONS.find(s => s.id === id) || FT_STATUS_OPTIONS[3];
 }
 
-function ftLoadUsers() {
-  const raw = localStorage.getItem(FT_USERS_KEY);
-  if (!raw) {
-    const seed = [
-      {
-        id: 'u-admin',
-        username: 'admin',
-        password: 'admin123',
-        role: 'manager',
-        name: 'مدير النظام',
-        location: '—',
-        tasksCount: 0,
-        status: 'active',
-        updatedAt: Date.now(),
-      },
-    ];
-    localStorage.setItem(FT_USERS_KEY, JSON.stringify(seed));
-    return seed;
-  }
+// -------- كاش المستخدمين المحلي (offline) - يُحدَّث من السيرفر عند توفر الاتصال --------
+function ftLoadUsersCache() {
+  const raw = localStorage.getItem(FT_USERS_CACHE_KEY);
+  if (!raw) return [];
   try {
     return JSON.parse(raw);
   } catch (e) {
@@ -470,10 +473,17 @@ function ftLoadUsers() {
   }
 }
 
-function ftSaveUsers(users) {
-  localStorage.setItem(FT_USERS_KEY, JSON.stringify(users));
+function ftSaveUsersCache(users) {
+  localStorage.setItem(FT_USERS_CACHE_KEY, JSON.stringify(users));
 }
 
+// اسم متوافق مع الكود القديم الذي كان يستدعي ftLoadUsers() في عشرات الأماكن لعرض
+// قوائم الفنيين/الموظفين - الآن يقرأ من الكاش المحلي المُحدَّث من السيرفر.
+function ftLoadUsers() {
+  return ftLoadUsersCache();
+}
+
+// -------- الجلسة: تخزّن التوكن الموقّع من السيرفر + بيانات المستخدم المعروضة --------
 function ftGetSession() {
   try {
     return JSON.parse(sessionStorage.getItem(FT_SESSION_KEY) || 'null');
@@ -482,44 +492,124 @@ function ftGetSession() {
   }
 }
 
-function ftSetSession(userId) {
-  sessionStorage.setItem(FT_SESSION_KEY, JSON.stringify({ userId }));
+function ftSetSession(token, user) {
+  sessionStorage.setItem(FT_SESSION_KEY, JSON.stringify({ token, user }));
 }
 
 function ftClearSession() {
   sessionStorage.removeItem(FT_SESSION_KEY);
 }
 
+function ftAuthToken() {
+  const s = ftGetSession();
+  return s ? s.token : null;
+}
+
+// ملاحظة مهمة: هذا الكائن "للعرض فقط" (اسم، دور، شارة...) في الواجهة. الصلاحية
+// الفعلية تُفرض دائماً من طرف السيرفر بغض النظر عمّا يحتويه هذا الكائن محلياً.
 function ftCurrentUser() {
   const session = ftGetSession();
-  if (!session) return null;
-  const users = ftLoadUsers();
-  return users.find(u => u.id === session.userId) || null;
+  return session ? session.user : null;
+}
+
+// -------- طبقة اتصال موحّدة بالسيرفر ترفق التوكن تلقائياً وتتعامل مع انتهاء الجلسة --------
+async function ftApiFetch(path, options = {}) {
+  const token = ftAuthToken();
+  const headers = Object.assign({}, options.headers || {});
+  if (token) headers['Authorization'] = 'Bearer ' + token;
+  if (options.body && !headers['Content-Type']) headers['Content-Type'] = 'application/json';
+
+  const res = await fetch(path, Object.assign({}, options, { headers }));
+
+  if (res.status === 401) {
+    // التوكن غير صالح/منتهي - سجّل خروج المستخدم إجبارياً بدل ترك الواجهة بحالة غير متسقة
+    ftClearSession();
+    ftRenderAuthGate();
+    throw new Error('انتهت الجلسة، يرجى تسجيل الدخول مجدداً');
+  }
+  return res;
 }
 
 let ftPendingCounter = 0;
 let ftPendingStatus = 'active';
 let ftDeleteTargetId = null;
 
-function ftHandleLogin(event) {
+// -------- ترحيل لمرة واحدة: نقل مستخدمي localStorage القدامى (قبل هذا التحديث) للسيرفر --------
+async function ftRunOneTimeMigrationIfNeeded() {
+  if (localStorage.getItem(FT_MIGRATED_FLAG_KEY)) return;
+  let legacyUsers = [];
+  try {
+    const raw = localStorage.getItem(FT_LEGACY_USERS_KEY);
+    if (raw) legacyUsers = JSON.parse(raw);
+  } catch (e) { /* تجاهل */ }
+
+  try {
+    const res = await fetch('/.netlify/functions/migrate-local-users', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ users: legacyUsers }),
+    });
+    // 409 تعني أن الترحيل تم مسبقاً من جهاز آخر - وهذا متوقع وطبيعي، ليس خطأ
+    if (res.ok || res.status === 409) {
+      localStorage.setItem(FT_MIGRATED_FLAG_KEY, '1');
+    }
+  } catch (e) {
+    // لا يوجد اتصال بالإنترنت الآن - سنحاول الترحيل مرة أخرى في المرة القادمة
+    console.warn('تعذّر تنفيذ الترحيل الأولي (لا يوجد اتصال؟)، سيُعاد المحاولة لاحقاً', e);
+  }
+}
+
+async function ftHandleLogin(event) {
   event.preventDefault();
   const usernameInput = document.getElementById('ft-login-username');
   const passwordInput = document.getElementById('ft-login-password');
   const errorBox = document.getElementById('ft-login-error');
+  const submitBtn = event.target.querySelector('button[type="submit"]');
 
   const username = usernameInput.value.trim();
   const password = passwordInput.value;
-  const users = ftLoadUsers();
-  const found = users.find(u => u.username === username && u.password === password);
 
-  if (!found) {
-    errorBox.textContent = 'اسم المستخدم أو كلمة المرور غير صحيحة';
-    errorBox.classList.remove('hidden');
-    return;
-  }
+  if (submitBtn) submitBtn.disabled = true;
   errorBox.classList.add('hidden');
-  ftSetSession(found.id);
-  ftRenderAuthGate();
+
+  try {
+    // تأكّد من إتمام الترحيل الأولي قبل أول محاولة دخول (مهم لأول تشغيل بعد التحديث)
+    await ftRunOneTimeMigrationIfNeeded();
+
+    const res = await fetch('/.netlify/functions/auth-login', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ username, password }),
+    });
+    const data = await res.json();
+
+    if (!res.ok) {
+      errorBox.textContent = data.error || 'اسم المستخدم أو كلمة المرور غير صحيحة';
+      errorBox.classList.remove('hidden');
+      return;
+    }
+
+    ftSetSession(data.token, data.user);
+    // حدّث الكاش المحلي بأحدث قائمة مستخدمين متاحة لهذا الدور (offline لاحقاً)
+    ftRefreshUsersCacheFromServer().catch(() => {});
+    ftRenderAuthGate();
+  } catch (err) {
+    errorBox.textContent = 'تعذّر الاتصال بالسيرفر - تأكد من الإنترنت وحاول مجدداً';
+    errorBox.classList.remove('hidden');
+  } finally {
+    if (submitBtn) submitBtn.disabled = false;
+  }
+}
+
+// يجلب قائمة المستخدمين المرئية للدور الحالي من السيرفر ويحدّث الكاش المحلي
+async function ftRefreshUsersCacheFromServer() {
+  const user = ftCurrentUser();
+  if (!user || user.role === 'technician') return; // الفني لا يحتاج قائمة مستخدمين
+  const res = await ftApiFetch('/.netlify/functions/users-admin', { method: 'GET' });
+  if (!res.ok) return;
+  const users = await res.json();
+  ftSaveUsersCache(users);
+  return users;
 }
 
 function ftLogout() {
@@ -527,6 +617,49 @@ function ftLogout() {
   const form = document.getElementById('ft-login-form');
   if (form) form.reset();
   ftRenderAuthGate();
+}
+
+// ==========================================
+// دالة الصلاحيات المركزية (تعكس نفس منطق السيرفر _lib/auth.mjs لأغراض العرض فقط).
+// == هذه الدالة لأغراض الواجهة فقط (إظهار/إخفاء أزرار) وليست حدود الأمان الفعلية ==
+// حدود الأمان الحقيقية مفروضة على السيرفر (netlify/functions) بغض النظر عمّا تقرره
+// هذه الدالة، حتى لو عدّل شخص هذا الملف نفسه من أدوات المطوّر.
+// ==========================================
+function hasPermission(user, action, context = {}) {
+  if (!user) return false;
+  const role = user.role;
+
+  switch (action) {
+    case 'VIEW_ADMIN_NAV': // لوحات التحكم بالتذاكر (dashboard, tasks, reports...)
+      return role === 'admin' || role === 'supervisor';
+    case 'VIEW_SETTINGS': // إعدادات النظام
+      return role === 'admin';
+    case 'MANAGE_USERS': // إضافة/تعديل/حذف مستخدمين
+      return role === 'admin';
+    case 'VIEW_TEAM_MAP':
+      return role === 'admin' || role === 'supervisor';
+    case 'VIEW_MANAGER_MESSAGES':
+      return role === 'admin' || role === 'supervisor';
+    case 'VIEW_TECH_PROFILE': // واجهة الفني الذاتية (حالة، مهامه، رسائله)
+      return role === 'technician';
+    case 'CREATE_ORDER':
+      if (role === 'admin') return true;
+      if (role === 'supervisor') return context.targetTeamId === user.teamId;
+      return false;
+    case 'TRANSFER_ORDER':
+      if (role === 'admin') return true;
+      if (role === 'supervisor') return context.orderTeamId === user.teamId && context.targetTeamId === user.teamId;
+      return false;
+    case 'DELETE_ORDER':
+      return role === 'admin';
+    case 'UPDATE_TICKET':
+      if (role === 'admin') return true;
+      if (role === 'supervisor') return context.orderTeamId === user.teamId;
+      if (role === 'technician') return context.assignedTo === user.name;
+      return false;
+    default:
+      return false;
+  }
 }
 
 // يعرض بوابة الدخول أو التطبيق حسب حالة الجلسة الحالية
@@ -554,38 +687,44 @@ async function ftBootAuthenticatedApp() {
   const nameBadge = document.getElementById('ft-user-name-badge');
   const roleBadge = document.getElementById('ft-user-role-badge');
   if (nameBadge) nameBadge.textContent = currentUser.name;
-  if (roleBadge) roleBadge.textContent = currentUser.role === 'manager' ? 'مسؤول' : 'موظف';
+  if (roleBadge) roleBadge.textContent = FT_ROLE_LABELS[currentUser.role] || currentUser.role;
 
-  const managerOnlyNav = document.getElementById('nav-item-employees');
-  const employeeOnlyNav = document.getElementById('nav-item-profile');
-  const managerMessagesNav = document.getElementById('nav-item-messages');
-  const managerMapNav = document.getElementById('nav-item-tech-map');
-  if (managerOnlyNav) managerOnlyNav.classList.toggle('hidden', currentUser.role !== 'manager');
-  if (employeeOnlyNav) employeeOnlyNav.classList.toggle('hidden', currentUser.role !== 'employee');
-  if (managerMessagesNav) managerMessagesNav.classList.toggle('hidden', currentUser.role !== 'manager');
-  if (managerMapNav) managerMapNav.classList.toggle('hidden', currentUser.role !== 'manager');
+  const employeesNav = document.getElementById('nav-item-employees'); // إدارة المستخدمين - admin فقط
+  const profileNav = document.getElementById('nav-item-profile'); // واجهة الفني الذاتية
+  const messagesNav = document.getElementById('nav-item-messages'); // صندوق رسائل المسؤول/المشرف
+  const mapNav = document.getElementById('nav-item-tech-map'); // خريطة الفنيين
+  const settingsNav = document.querySelector('.top-nav-item[onclick*="\'settings\'"]'); // إعدادات النظام - admin فقط
+
+  if (employeesNav) employeesNav.classList.toggle('hidden', !hasPermission(currentUser, 'MANAGE_USERS'));
+  if (profileNav) profileNav.classList.toggle('hidden', !hasPermission(currentUser, 'VIEW_TECH_PROFILE'));
+  if (messagesNav) messagesNav.classList.toggle('hidden', !hasPermission(currentUser, 'VIEW_MANAGER_MESSAGES'));
+  if (mapNav) mapNav.classList.toggle('hidden', !hasPermission(currentUser, 'VIEW_TEAM_MAP'));
 
   // تجهيز نظام الرسائل: طلب إذن الإشعارات وتحديث شارات العداد غير المقروء
   ftRequestNotificationPermission();
   ftUpdateMessagesBadges();
 
-  // بدء متابعة موقع الموظف تلقائياً (بصمت) ليظهر على خريطة المسؤول لحظياً
+  // بدء متابعة موقع الفني تلقائياً (بصمت) ليظهر على خريطة المشرف/المدير لحظياً
   ftStartLocationTrackingIfEmployee(currentUser);
 
-  // إخفاء تبويبات نظام التذاكر (لوحة التحكم، المهام، التقارير...) عن الموظف
-  // ليبقى له واجهته الخاصة فقط لتحديد حالته وعدد مهامه
+  // تبويبات نظام التذاكر (لوحة التحكم، المهام، التقارير...) متاحة للمدير والمشرف فقط،
+  // الفني يبقى على واجهته الخاصة فقط (تحديد حالته وعدد مهامه)
   document.querySelectorAll('.ft-manager-only-nav').forEach(btn => {
-    btn.classList.toggle('hidden', currentUser.role !== 'manager');
+    btn.classList.toggle('hidden', !hasPermission(currentUser, 'VIEW_ADMIN_NAV'));
   });
+  // إعدادات النظام تبويب حسّاس إضافي: مدير فقط حتى لو كان ضمن ft-manager-only-nav
+  if (settingsNav) settingsNav.classList.toggle('hidden', !hasPermission(currentUser, 'VIEW_SETTINGS'));
 
-  // توجيه الموظف تلقائياً إلى واجهته الخاصة (تحديد الحالة وعدد المهام)
-  // بينما يبقى المسؤول على لوحة التحكم الرئيسية كما هي
-  if (currentUser.role === 'employee') {
+  // توجيه الفني تلقائياً إلى واجهته الخاصة (تحديد الحالة وعدد المهام)
+  // بينما يبقى المدير/المشرف على لوحة التحكم الرئيسية كما هي
+  if (currentUser.role === 'technician') {
     const profileNavBtn = document.getElementById('nav-item-profile');
     switchTab('profile', profileNavBtn);
   } else {
     const dashboardNavBtn = document.querySelector('.top-nav-item[onclick*="dashboard"]');
     switchTab('dashboard', dashboardNavBtn);
+    // حدّث كاش المستخدمين من السيرفر (يفلتر تلقائياً حسب الدور: admin يرى الكل، supervisor فريقه فقط)
+    ftRefreshUsersCacheFromServer().then(() => ftRenderEmployeesView()).catch(() => {});
   }
 
   // تشغيل التطبيق الأساسي (المهام/التذاكر) مرة واحدة فقط بعد الدخول
@@ -609,42 +748,49 @@ async function ftBootAuthenticatedApp() {
 
 /* ---------------------- لوحة إدارة الموظفين (للمسؤول) ---------------------- */
 
-function ftHandleAddEmployee(event) {
+// == تحديث أمني ==: إضافة/حذف مستخدمين الآن يتم عبر السيرفر (users-admin.mjs) الذي
+// يتحقق فعلياً أن المستخدم الحالي admin قبل التنفيذ - وليس فقط إخفاء الزر في الواجهة.
+async function ftHandleAddEmployee(event) {
   event.preventDefault();
   const name = document.getElementById('ft-new-emp-name').value.trim();
   const username = document.getElementById('ft-new-emp-username').value.trim();
   const password = document.getElementById('ft-new-emp-password').value;
   const location = document.getElementById('ft-new-emp-location').value.trim();
+  const roleSelect = document.getElementById('ft-new-emp-role');
+  const teamInput = document.getElementById('ft-new-emp-team');
+  const role = roleSelect ? roleSelect.value : 'technician';
+  const teamId = teamInput ? teamInput.value.trim() : '';
 
   if (!name || !username || !password || !location) return;
-
-  const users = ftLoadUsers();
-  if (users.some(u => u.username === username)) {
-    alert('اسم المستخدم مستخدم بالفعل، اختر اسماً آخر');
+  if ((role === 'supervisor' || role === 'technician') && !teamId) {
+    alert('يرجى تحديد الفريق/المنطقة (team) لهذا الدور');
     return;
   }
 
-  users.push({
-    id: 'u-' + Date.now().toString(36) + Math.random().toString(36).slice(2, 6),
-    username,
-    password,
-    role: 'employee',
-    name,
-    location,
-    tasksCount: 0,
-    status: 'active',
-    updatedAt: Date.now(),
-  });
-  ftSaveUsers(users);
-  document.getElementById('ft-add-employee-form').reset();
-  ftRenderEmployeesView();
+  try {
+    const res = await ftApiFetch('/.netlify/functions/users-admin', {
+      method: 'POST',
+      body: JSON.stringify({ username, password, name, role, teamId: teamId || null, location }),
+    });
+    const data = await res.json();
+    if (!res.ok) {
+      alert(data.error || 'تعذّر إضافة المستخدم');
+      return;
+    }
+    document.getElementById('ft-add-employee-form').reset();
+    await ftRefreshUsersCacheFromServer();
+    ftRenderEmployeesView();
+  } catch (err) {
+    alert('تعذّر الاتصال بالسيرفر');
+  }
 }
 
 function ftRenderEmployeesView() {
   const tbody = document.getElementById('ft-employees-table-body');
   if (!tbody) return;
   const users = ftLoadUsers();
-  const employees = users.filter(u => u.role === 'employee');
+  // "الموظفون" هنا تشمل المشرفين والفنيين (كل من ليس admin) لأن إدارة المستخدمين admin فقط أصلاً
+  const employees = users.filter(u => u.role === 'technician' || u.role === 'supervisor');
 
   const statTotal = document.getElementById('ft-stat-emp-total');
   const statActive = document.getElementById('ft-stat-emp-active');
@@ -656,7 +802,7 @@ function ftRenderEmployeesView() {
   if (statDone) statDone.textContent = employees.filter(e => e.status === 'done').length;
 
   if (employees.length === 0) {
-    tbody.innerHTML = `<tr><td colspan="7" style="text-align:center; padding:24px; color: var(--text-muted);">لا يوجد موظفون مسجلون بعد — أضف أول موظف من النموذج أعلاه</td></tr>`;
+    tbody.innerHTML = `<tr><td colspan="8" style="text-align:center; padding:24px; color: var(--text-muted);">لا يوجد موظفون مسجلون بعد — أضف أول موظف من النموذج أعلاه</td></tr>`;
     return;
   }
 
@@ -666,24 +812,37 @@ function ftRenderEmployeesView() {
       <tr>
         <td>${escapeHtml(emp.name)}</td>
         <td>${escapeHtml(emp.username)}</td>
-        <td>${escapeHtml(emp.location)}</td>
+        <td>${FT_ROLE_LABELS[emp.role] || emp.role}</td>
+        <td>${escapeHtml(emp.teamId || emp.team_id || '—')}</td>
+        <td>${escapeHtml(emp.location || '—')}</td>
         <td>${Number(emp.tasksCount) || 0}</td>
         <td><span class="ft-emp-pill ft-emp-${meta.cls}">${meta.label}</span></td>
-        <td>${new Date(emp.updatedAt || Date.now()).toLocaleString('ar-EG', { hour: '2-digit', minute: '2-digit', day: '2-digit', month: '2-digit' })}</td>
         <td><button class="btn btn-danger" style="padding:6px 12px; font-size:0.8rem;" onclick="ftConfirmDeleteEmployee('${emp.id}')">حذف</button></td>
       </tr>
     `;
   }).join('');
 }
 
-function ftConfirmDeleteEmployee(userId) {
+async function ftConfirmDeleteEmployee(userId) {
   const users = ftLoadUsers();
   const target = users.find(u => u.id === userId);
   if (!target) return;
-  if (confirm(`هل أنت متأكد من حذف حساب "${target.name}"؟ لا يمكن التراجع عن هذا الإجراء.`)) {
+  if (!confirm(`هل أنت متأكد من حذف حساب "${target.name}"؟ لا يمكن التراجع عن هذا الإجراء.`)) return;
+
+  try {
+    const res = await ftApiFetch('/.netlify/functions/users-admin?id=' + encodeURIComponent(userId), {
+      method: 'DELETE',
+    });
+    if (!res.ok) {
+      const data = await res.json().catch(() => ({}));
+      alert(data.error || 'تعذّر حذف المستخدم');
+      return;
+    }
     ftDeleteTargetId = userId;
-    ftSaveUsers(users.filter(u => u.id !== userId));
+    await ftRefreshUsersCacheFromServer();
     ftRenderEmployeesView();
+  } catch (err) {
+    alert('تعذّر الاتصال بالسيرفر');
   }
 }
 
@@ -756,7 +915,7 @@ function ftSwitchProfileTasksTab(tab, btnElement) {
 async function ftRenderProfileTasksPanel(tab = 'assigned') {
   const user = ftCurrentUser();
   const tbody = document.getElementById('ft-profile-tasks-list');
-  if (!user || !tbody || user.role !== 'employee') return;
+  if (!user || !tbody || user.role !== 'technician') return;
 
   const allOrders = await db.workOrders.toArray();
   const myName = (user.name || '').trim();
@@ -826,79 +985,103 @@ function ftCounterChange(delta) {
   if (counterEl) counterEl.textContent = ftPendingCounter;
 }
 
-function ftSaveProfileUpdate() {
-  const session = ftGetSession();
-  if (!session) return;
-  const users = ftLoadUsers();
-  const idx = users.findIndex(u => u.id === session.userId);
-  if (idx === -1) return;
-
-  users[idx].tasksCount = ftPendingCounter;
-  users[idx].status = ftPendingStatus;
-  users[idx].updatedAt = Date.now();
-  ftSaveUsers(users);
+// == تحديث ==: يحفظ حالة/عدد مهام الفني على السيرفر (تحديث ذاتي مسموح لأي دور
+// لبياناته الخاصة فقط - يتحقق منه users-admin.mjs)، ويحدّث الكاش المحلي فوراً
+// حتى تنعكس القيمة في الواجهة بلا تأخير حتى لو فشل الاتصال لاحقاً.
+async function ftSaveProfileUpdate() {
+  const user = ftCurrentUser();
+  if (!user) return;
 
   const saveNote = document.getElementById('ft-profile-save-note');
-  if (saveNote) {
-    saveNote.textContent = currentLang === 'ar' ? 'تم حفظ التحديث ✓' : 'Update saved ✓';
-    setTimeout(() => { saveNote.textContent = ''; }, 2500);
+
+  try {
+    const res = await ftApiFetch('/.netlify/functions/users-admin', {
+      method: 'PUT',
+      body: JSON.stringify({ id: user.id, status: ftPendingStatus, tasksCount: ftPendingCounter }),
+    });
+    if (!res.ok) throw new Error('update failed');
+
+    // حدّث الكاش المحلي بنفس القيم حتى تظهر فوراً في قوائم الموظفين/الخريطة
+    const cache = ftLoadUsersCache();
+    const idx = cache.findIndex(u => u.id === user.id);
+    if (idx !== -1) {
+      cache[idx].tasksCount = ftPendingCounter;
+      cache[idx].status = ftPendingStatus;
+      ftSaveUsersCache(cache);
+    }
+
+    if (saveNote) {
+      saveNote.textContent = currentLang === 'ar' ? 'تم حفظ التحديث ✓' : 'Update saved ✓';
+      setTimeout(() => { saveNote.textContent = ''; }, 2500);
+    }
+  } catch (err) {
+    if (saveNote) {
+      saveNote.textContent = currentLang === 'ar' ? '⚠️ تعذّر الحفظ، سيُعاد لاحقاً' : '⚠️ Could not save, will retry later';
+      setTimeout(() => { saveNote.textContent = ''; }, 3000);
+    }
   }
 }
 
-// مزامنة حية: أي تحديث من الموظف ينعكس مباشرة في جدول المسؤول
-window.addEventListener('storage', (e) => {
-  if (e.key === FT_USERS_KEY) {
-    const view = document.getElementById('view-employees');
-    if (view && !view.classList.contains('hidden')) ftRenderEmployeesView();
-    const mapView = document.getElementById('view-tech-map');
-    if (mapView && !mapView.classList.contains('hidden')) renderTechMap();
-  }
-  if (e.key === FT_MESSAGES_KEY) {
-    ftUpdateMessagesBadges();
-  }
-});
+// تحديث دوري لقائمة الموظفين/الرسائل غير المقروءة وخريطة الفنيين من السيرفر
 setInterval(() => {
   const view = document.getElementById('view-employees');
-  if (view && !view.classList.contains('hidden')) ftRenderEmployeesView();
+  if (view && !view.classList.contains('hidden')) {
+    ftRefreshUsersCacheFromServer().then(() => ftRenderEmployeesView()).catch(() => {});
+  }
   ftUpdateMessagesBadges();
   const mapView = document.getElementById('view-tech-map');
-  if (mapView && !mapView.classList.contains('hidden')) renderTechMap();
+  if (mapView && !mapView.classList.contains('hidden')) {
+    ftRefreshUsersCacheFromServer().then(() => renderTechMap()).catch(() => {});
+  }
   ftCheckSlaAndNotify();
-}, 4000);
+}, 15000);
 
 /* ==========================================================================
    خريطة تتبع مواقع الفنيين المباشرة (Live Technicians Map)
    يعتمد على Leaflet.js + OpenStreetMap لعرض الخريطة، وعلى Geolocation API
-   لدى جهاز كل موظف لتحديث موقعه (يُخزَّن ضمن سجل المستخدم بنفس أسلوب
-   نظام حسابات الموظفين، ويُقرأ لاحقاً من صفحة خريطة المسؤول)
+   لدى جهاز كل فني لتحديث موقعه (يُرسَل للسيرفر ويُخزَّن في جدول users،
+   ويُقرأ لاحقاً من صفحة خريطة المدير/المشرف)
    ========================================================================== */
 
 let ftLocationWatchId = null;
 let ftMapInstance = null;
 let ftMapMarkers = {};
 
-// تحديث موقع المستخدم الحالي (الموظف) في سجله الشخصي
-function ftUpdateMyLocation(lat, lng) {
-  const session = ftGetSession();
-  if (!session) return;
-  const users = ftLoadUsers();
-  const idx = users.findIndex(u => u.id === session.userId);
-  if (idx === -1) return;
-  users[idx].lat = lat;
-  users[idx].lng = lng;
-  users[idx].locUpdatedAt = Date.now();
-  ftSaveUsers(users);
+// تحديث موقع المستخدم الحالي (الفني) في سجله على السيرفر
+async function ftUpdateMyLocation(lat, lng) {
+  const user = ftCurrentUser();
+  if (!user) return;
 
-  const note = document.getElementById('ft-location-status-note');
-  if (note) {
-    const timeStr = new Date().toLocaleTimeString(currentLang === 'ar' ? 'ar-EG' : 'en-US', { hour: '2-digit', minute: '2-digit' });
-    note.textContent = currentLang === 'ar' ? `✅ تتم مشاركة موقعك (آخر تحديث ${timeStr})` : `✅ Sharing your location (updated ${timeStr})`;
+  try {
+    const res = await ftApiFetch('/.netlify/functions/users-admin', {
+      method: 'PUT',
+      body: JSON.stringify({ id: user.id, lat, lng }),
+    });
+    if (!res.ok) throw new Error('location update failed');
+
+    const cache = ftLoadUsersCache();
+    const idx = cache.findIndex(u => u.id === user.id);
+    if (idx !== -1) {
+      cache[idx].lat = lat;
+      cache[idx].lng = lng;
+      cache[idx].locUpdatedAt = Date.now();
+      ftSaveUsersCache(cache);
+    }
+
+    const note = document.getElementById('ft-location-status-note');
+    if (note) {
+      const timeStr = new Date().toLocaleTimeString(currentLang === 'ar' ? 'ar-EG' : 'en-US', { hour: '2-digit', minute: '2-digit' });
+      note.textContent = currentLang === 'ar' ? `✅ تتم مشاركة موقعك (آخر تحديث ${timeStr})` : `✅ Sharing your location (updated ${timeStr})`;
+    }
+  } catch (err) {
+    // فشل صامت (غالباً بسبب انقطاع الاتصال) - ستُحاول المتابعة الدورية مجدداً تلقائياً
+    console.warn('تعذّر إرسال الموقع للسيرفر:', err);
   }
 }
 
 // بدء متابعة الموقع تلقائياً بعد تسجيل دخول موظف (بصمت، بدون إزعاج لو رفض الإذن)
 function ftStartLocationTrackingIfEmployee(user) {
-  if (!user || user.role !== 'employee') return;
+  if (!user || user.role !== 'technician') return;
   if (ftLocationWatchId !== null) return; // المتابعة مفعّلة مسبقاً
   if (!navigator.geolocation) return;
 
@@ -937,7 +1120,7 @@ function renderTechMap() {
   const mapEl = document.getElementById('tech-map');
   if (!mapEl || typeof L === 'undefined') return;
 
-  const employees = ftLoadUsers().filter(u => u.role === 'employee');
+  const employees = ftLoadUsers().filter(u => u.role === 'technician');
   const withLocation = employees.filter(e => typeof e.lat === 'number' && typeof e.lng === 'number');
 
   if (!ftMapInstance) {
@@ -1080,7 +1263,7 @@ async function ftSuggestNearestTechnician() {
     return;
   }
 
-  const employees = ftLoadUsers().filter(u => u.role === 'employee' && typeof u.lat === 'number' && typeof u.lng === 'number');
+  const employees = ftLoadUsers().filter(u => u.role === 'technician' && typeof u.lat === 'number' && typeof u.lng === 'number');
   if (employees.length === 0) {
     statusNote.textContent = currentLang === 'ar'
       ? 'لا يوجد فنيون يشاركون موقعهم الحي حالياً.'
@@ -1142,7 +1325,7 @@ function ftPickNearestTechnician(techName) {
 // إعادة قائمة مهام اليوم الحالي (غير المكتملة) للفني الحالي، مرتبة حسب الأولوية
 async function ftGetTodaysTasksForCurrentTech() {
   const user = ftCurrentUser();
-  if (!user || user.role !== 'employee') return [];
+  if (!user || user.role !== 'technician') return [];
 
   const myName = (user.name || '').trim();
   const todayStr = new Date().toISOString().slice(0, 10); // YYYY-MM-DD بنفس صيغة حقل deadline
@@ -1335,7 +1518,7 @@ function ftSaveSlaNotifiedState(state) {
 async function ftCheckSlaAndNotify() {
   const user = ftCurrentUser();
   const banner = document.getElementById('sla-alert-banner');
-  if (!user || user.role !== 'manager') {
+  if (!user || !hasPermission(user, 'VIEW_ADMIN_NAV')) {
     if (banner) banner.classList.add('hidden');
     return;
   }
@@ -1589,7 +1772,7 @@ function ftSendMessage({ toId, toName, type, workOrderId, workOrderLabel, transf
 function ftInboxFor(user) {
   const msgs = ftLoadMessages();
   if (!user) return [];
-  if (user.role === 'manager') {
+  if (hasPermission(user, 'VIEW_MANAGER_MESSAGES')) {
     return msgs.filter(m => m.toId === 'manager' || m.toId === user.id);
   }
   return msgs.filter(m => m.toId === user.id || m.toId === 'all');
@@ -1671,7 +1854,7 @@ function ftPopulateMessageEmployeeSelect(selectId, includeAllOption) {
   const select = document.getElementById(selectId);
   if (!select) return;
   const previousValue = select.value; // احتفظ بالاختيار الحالي (مثلاً اسم موظف محدد) قبل إعادة البناء
-  const employees = ftLoadUsers().filter(u => u.role === 'employee');
+  const employees = ftLoadUsers().filter(u => u.role === 'technician');
   let optionsHtml = '';
   if (includeAllOption) {
     optionsHtml += `<option value="all">${currentLang === 'ar' ? '📣 جميع الموظفين' : '📣 All Employees'}</option>`;
@@ -1895,7 +2078,7 @@ async function ftToggleMgrMsgRecording() {
 
 async function ftRenderMessagesView() {
   const user = ftCurrentUser();
-  if (!user || user.role !== 'manager') return;
+  if (!user || !hasPermission(user, 'VIEW_MANAGER_MESSAGES')) return;
 
   await ftPopulateMessageTaskSelect('ft-msg-mgr-task-select', null);
   ftPopulateMessageEmployeeSelect('ft-msg-mgr-to-select', true);
@@ -1924,7 +2107,7 @@ function ftManagerSendMessage(event) {
   if (!toSelect || !typeSelect || !taskSelect || !contentInput) return;
 
   const toId = toSelect.value;
-  const employees = ftLoadUsers().filter(u => u.role === 'employee');
+  const employees = ftLoadUsers().filter(u => u.role === 'technician');
   const toName = toId === 'all'
     ? (currentLang === 'ar' ? 'جميع الموظفين' : 'All Employees')
     : ((employees.find(e => e.id === toId) || {}).name || '');
@@ -2002,12 +2185,12 @@ function ftEmployeeSendMessage(event) {
 // عرض صندوق وارد الموظف (رسائل من المسؤول + إشعارات عامة) وتجهيز نماذج الإرسال
 async function ftRenderEmployeeMessagesPanel() {
   const user = ftCurrentUser();
-  if (!user || user.role !== 'employee') return;
+  if (!user || user.role !== 'technician') return;
 
   await ftPopulateMessageTaskSelect('ft-msg-emp-task-select', user.name);
   const transferSelect = document.getElementById('ft-msg-emp-transfer-select');
   if (transferSelect) {
-    const others = ftLoadUsers().filter(u => u.role === 'employee' && u.id !== user.id);
+    const others = ftLoadUsers().filter(u => u.role === 'technician' && u.id !== user.id);
     transferSelect.innerHTML = others.map(e => `<option value="${e.id}">${escapeHtml(e.name)}</option>`).join('');
   }
 
@@ -2316,6 +2499,12 @@ async function getUniqueTechnicians() {
   orders.forEach(o => {
     if (o.assignedTo && o.assignedTo.trim() !== "") techs.add(o.assignedTo.trim());
     if (o.transferredTo && o.transferredTo.trim() !== "") techs.add(o.transferredTo.trim());
+  });
+  // == تحديث ==: أضف أيضاً كل الفنيين المسجَّلين فعلياً (من كاش السيرفر) حتى يظهر
+  // فني جديد فوراً في قائمة الإسناد حتى قبل أن يُسند إليه أي تذكرة سابقة. الكاش
+  // مفلتَر أصلاً حسب الدور (المشرف يرى فنيي فريقه فقط)، فتظهر له خياراته الصحيحة فقط.
+  ftLoadUsers().forEach(u => {
+    if (u.role === 'technician' && u.name && u.name.trim() !== '') techs.add(u.name.trim());
   });
   return Array.from(techs);
 }
@@ -4527,18 +4716,37 @@ async function processSyncQueue() {
     // في قاعدة بيانات Netlify DB المركزية، ولا تُعلَّم كـ "synced" إلا بعد نجاح الإرسال
     // فعلياً، حتى تبقى في الطابور وتُعاد المحاولة لاحقاً إن فشل الاتصال.
     try {
-      const res = await fetch('/.netlify/functions/sync-push', {
+      // == تحديث أمني ==: يجب إرفاق توكن المستخدم الآن (ftApiFetch)، والسيرفر يتحقق
+      // فعلياً من صلاحية كل عملية على حدة (canActOnOrder) - أي عنصر لا يجتاز الفحص
+      // على السيرفر يُرفض ويظهر في rejected[] بدل أن يُطبَّق بصمت.
+      const res = await ftApiFetch('/.netlify/functions/sync-push', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           items: pendingItems.map((it) => ({ action: it.action, payload: it.payload }))
         })
       });
 
       if (!res.ok) throw new Error('sync-push failed: ' + res.status);
+      const result = await res.json();
+      const rejectedIds = new Set((result.rejected || []).map((r) => r.id));
 
       for (let item of pendingItems) {
-        await db.syncQueue.update(item.id, { status: 'synced' });
+        if (rejectedIds.has(item.payload && item.payload.id)) {
+          // رفضها السيرفر لأن المستخدم لا يملك صلاحية فعلية لهذا الإجراء - لا فائدة
+          // من إعادة محاولتها لاحقاً، نعلّمها كمرفوضة بدل تكرار المحاولة للأبد.
+          await db.syncQueue.update(item.id, { status: 'rejected' });
+        } else {
+          await db.syncQueue.update(item.id, { status: 'synced' });
+        }
+      }
+      if (rejectedIds.size > 0) {
+        console.warn('رفض السيرفر بعض العمليات لعدم وجود صلاحية كافية:', result.rejected);
+        const reasons = (result.rejected || []).map(r => `#${r.id}: ${r.reason}`).join('\n');
+        alert(
+          (currentLang === 'ar'
+            ? `⚠️ تم رفض ${result.rejected.length} عملية من السيرفر بسبب نقص الصلاحية:\n`
+            : `⚠️ ${result.rejected.length} operation(s) rejected by the server due to insufficient permission:\n`) + reasons
+        );
       }
     } catch (err) {
       console.warn('تعذّرت مزامنة العمليات المعلقة، سيُعاد المحاولة لاحقاً عند توفر الاتصال:', err);
@@ -4560,7 +4768,10 @@ async function pullRemoteWorkOrders() {
   if (!navigator.onLine) return;
 
   try {
-    const res = await fetch('/.netlify/functions/sync-pull');
+    // == تحديث أمني ==: السيرفر الآن يفلتر النتائج إلزامياً حسب دور المستخدم
+    // (admin: الكل، supervisor: فريقه فقط، technician: تذاكره فقط) - وليس فقط
+    // إخفاء عناصر في الواجهة بعد جلب كل شيء كما كان سابقاً.
+    const res = await ftApiFetch('/.netlify/functions/sync-pull');
     if (!res.ok) throw new Error('sync-pull failed: ' + res.status);
     const remoteOrders = await res.json();
 
