@@ -7,7 +7,7 @@
   
   <link rel="stylesheet" href="style.css">
   <link rel="manifest" href="manifest.json">
-  <meta name="theme-color" content="#1b4d4f">
+  <meta name="theme-color" content="#0e7490">
 
   <!-- ============ إعدادات إضافية لدعم تثبيت التطبيق (PWA) بشكل صحيح على الجوال ============ -->
   <!-- دعم تشغيل التطبيق كتطبيق مستقل على أندرويد -->
@@ -202,6 +202,34 @@
     </div>
   </div>
 
+  <!-- شريط التنقل السفلي للهاتف — عنصر جديد بالكامل (إضافة فقط، لا يحذف
+       شريط القائمة المنسدلة أعلاه الذي يبقى موجوداً وعاملاً كما هو).
+       نفس الأزرار الأصلية بنفس الصنف "top-nav-item" و"ft-manager-only-nav"
+       حتى ترث منطق إظهار/إخفاء الصلاحيات وحالة "active" الموجود أصلاً في
+       app.js (switchTab) دون أي تعديل جافاسكربت. -->
+  <nav class="bottom-nav-bar">
+    <button class="top-nav-item bottom-nav-item ft-manager-only-nav" onclick="switchTab('dashboard', this)">
+      <span class="nav-icon">📊</span>
+      <span data-i18n="navDashboard">لوحة التحكم</span>
+    </button>
+    <button class="top-nav-item bottom-nav-item ft-manager-only-nav" onclick="switchTab('active-tasks', this)">
+      <span class="nav-icon">📋</span>
+      <span data-i18n="navActiveTasks">المهام النشطة</span>
+    </button>
+    <button class="top-nav-item bottom-nav-item ft-manager-only-nav" onclick="switchTab('calendar', this)">
+      <span class="nav-icon">🗓️</span>
+      <span data-i18n="navCalendar">التقويم</span>
+    </button>
+    <button class="top-nav-item bottom-nav-item ft-manager-only-nav" onclick="switchTab('clients', this)">
+      <span class="nav-icon">👥</span>
+      <span data-i18n="navClients">العملاء</span>
+    </button>
+    <button class="top-nav-item bottom-nav-item ft-manager-only-nav" onclick="switchTab('notes', this)">
+      <span class="nav-icon">📝</span>
+      <span data-i18n="navNotes">ملاحظات</span>
+    </button>
+  </nav>
+
   <!-- الحاوية الرئيسية -->
   <main class="app-container">
 
@@ -209,6 +237,29 @@
     <div id="view-dashboard" class="app-view">
       <!-- بانر تنبيه اقتراب/تجاوز الموعد النهائي (SLA) — يظهر تلقائياً للمسؤول فقط عند وجود مهام مهدَّدة -->
       <div id="sla-alert-banner" class="sla-banner hidden"></div>
+
+      <!-- بطاقات وصول سريع — عنصر جديد بالكامل (إضافة فقط)، مطابق لصف الأيقونات
+           بأعلى تصميم الحاسوب المرفق. تستدعي نفس دالة switchTab المستخدمة أصلاً
+           بالقائمة الجانبية، وبنفس صنف الصلاحيات "ft-manager-only-nav" حتى تظهر
+           وتختفي تلقائياً حسب دور المستخدم دون أي تعديل جافاسكربت. -->
+      <div class="ft-quick-actions-grid ft-manager-only-nav">
+        <div class="ft-quick-action-tile" onclick="switchTab('clients', this)">
+          <span class="qa-icon">👥</span>
+          <span data-i18n="navClients">جدول العملاء</span>
+        </div>
+        <div class="ft-quick-action-tile" onclick="switchTab('inventory', this)">
+          <span class="qa-icon">📦</span>
+          <span data-i18n="navInventory">إدارة مخزون العتاد</span>
+        </div>
+        <div class="ft-quick-action-tile" onclick="switchTab('performance', this)">
+          <span class="qa-icon">🏆</span>
+          <span data-i18n="navPerformance">تقييم أداء الفنيين</span>
+        </div>
+        <div class="ft-quick-action-tile" onclick="switchTab('reports', this)">
+          <span class="qa-icon">📈</span>
+          <span data-i18n="navReports">التقارير</span>
+        </div>
+      </div>
 
       <section class="dashboard-analytics card card-tech-bg">
         <div class="analytics-grid">
