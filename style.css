@@ -2509,3 +2509,56 @@ body.dark-theme {
 #subscriber-info strong {
   color: var(--brand-cyan-text);
 }
+
+/* ============================================================================
+   المرحلة ١٠ — هوية بصرية جديدة بالكامل (بنفسجي/Indigo) بدل السماوي/التركوازي
+   السابق، مطابقة للتصاميم المرفقة (mockups الهاتف الجديدة). بما إن كل التصميم
+   السابق كان مبنياً على متغيرات CSS موحّدة (--brand-cyan...)، إعادة تعريف
+   قيمة هذه المتغيرات هنا فقط تكفي لتحديث اللون بكل الصفحات دفعة واحدة —
+   دون حذف أو إعادة كتابة أي قاعدة قديمة. إضافة فقط، بترتيب لاحق يجعلها
+   الفعّالة (الأحدث بالكاسكيد يفوز عند نفس مستوى التحديد).
+   ============================================================================ */
+
+:root {
+  /* اللون الأساسي الجديد (indigo) بدل السماوي — بنفس أسماء المتغيرات
+     المستخدمة أصلاً بمئات الأماكن بالملف، فينتشر تلقائياً بكل مكان */
+  --brand-cyan: #5B5FEF;
+  --brand-cyan-soft: rgba(91, 95, 239, 0.12);
+  --brand-cyan-soft-strong: rgba(91, 95, 239, 0.20);
+  --brand-teal-deep: #0A0D12;
+  --glass-bg: rgba(10, 13, 18, 0.85);
+  --glass-border: rgba(91, 95, 239, 0.18);
+  --brand-cyan-text: #4038C9;
+
+  /* ألوان الحالة/الأولوية بنفس منطق التصميم المرفق (alert/warn/success) */
+  --status-pending-bg: #5B5FEF;
+  --status-completed-bg: #12B76A;
+  --status-onhold-bg: #F5A524;
+  --priority-urgent-bg: #E5484D;
+  --priority-normal-bg: #5B5FEF;
+  --priority-low-bg: #A6ABBB;
+
+  /* زوايا دائرية أوسع تطابق أسلوب البطاقات بالتصميم الجديد */
+  --radius-lg: 16px;
+  --radius-md: 12px;
+
+  /* الخطوط الجديدة — نطبّقها كمتغير حتى تستخدمه كل عناصر النص دون
+     الحاجة لإعادة كتابة كل قاعدة font-family على حدة */
+  --font-body: 'Readex Pro', 'Tajawal', sans-serif;
+  --font-display: 'Changa', 'Tajawal', sans-serif;
+  --font-mono: 'IBM Plex Mono', monospace;
+}
+body.dark-theme {
+  --brand-cyan-text: #A5A8FF;
+}
+
+body {
+  font-family: var(--font-body) !important;
+}
+h1, h2, h3, .app-title, .brand-title, .page-title, .toolbar-title {
+  font-family: var(--font-display) !important;
+  font-weight: 800;
+}
+.report-num, .status-bar, [class*="-mono"] {
+  font-family: var(--font-mono);
+}
