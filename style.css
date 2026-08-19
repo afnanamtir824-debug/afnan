@@ -1832,3 +1832,680 @@ body.dark-theme .sla-banner.sla-banner-critical {
     content: none;
   }
 }
+/* ============================================================================
+   المرحلة ١ — نظام التصميم الجديد (دمج مفهوم "الوضوح المجزأ" + "الزجاج الداكن"
+   للحاسوب، ودمج تصميمي الهاتف المرفقين). كل ما يلي هو إضافة بحتة فوق كل
+   القواعد السابقة في هذا الملف — لا يُحذف ولا يُعدَّل أي سطر مما فوق.
+   لأن معظم الألوان بالتصميم الأصلي مبنية على متغيرات CSS (var(--...))،
+   إعادة تعريف هذه المتغيرات هنا تكفي لتحديث الهوية البصرية في كل الصفحات
+   دفعة واحدة دون الحاجة لإعادة كتابة كل قاعدة على حدة.
+   ============================================================================ */
+
+:root {
+  /* لوحة الألوان المدمجة: قاعدة زجاجية داكنة (مفهوم ب) + وضوح ونظافة (مفهوم أ) */
+  --brand-cyan: #22d3ee;
+  --brand-cyan-soft: rgba(34, 211, 238, 0.14);
+  --brand-cyan-soft-strong: rgba(34, 211, 238, 0.24);
+  --brand-teal-deep: #0b2e2e;
+  --glass-bg: rgba(13, 27, 31, 0.82);
+  --glass-border: rgba(148, 197, 197, 0.18);
+  --glass-blur: 14px;
+  --shadow-elevated: 0 10px 30px rgba(8, 20, 24, 0.18);
+
+  /* ألوان حالة/أولوية أوضح وأكثر انسجاماً مع التصاميم المرفقة (نفس أسماء
+     المتغيرات الأصلية بالأعلى، فقط بقيم محدثة — كل الأماكن التي تستخدمها
+     أصلاً في الملف ستتحدث تلقائياً) */
+  --status-pending-bg: #2563eb;
+  --status-completed-bg: #16a34a;
+  --status-onhold-bg: #d97706;
+  --priority-urgent-bg: #dc2626;
+  --priority-normal-bg: #2563eb;
+  --priority-low-bg: #94a3b8;
+}
+
+body.dark-theme {
+  --glass-bg: rgba(8, 18, 21, 0.88);
+}
+
+/* ---------------------------------------------------------------------------
+   الهيدر: شريط زجاجي غامق بلمسة توهج سماوي (بدل التركوازي الفاتح المسطح)
+   --------------------------------------------------------------------------- */
+.app-header {
+  background: linear-gradient(135deg, var(--teal-header) 0%, var(--brand-teal-deep) 100%) !important;
+  border-bottom: 1px solid var(--glass-border);
+  box-shadow: 0 2px 20px rgba(0, 0, 0, 0.25);
+}
+.brand-logo {
+  background: var(--brand-cyan-soft);
+  border-radius: var(--radius-md);
+  padding: 5px;
+  box-shadow: 0 0 14px var(--brand-cyan-soft);
+}
+.brand-logo svg { stroke: var(--brand-cyan) !important; }
+.brand-title { color: #f0fdfa; letter-spacing: .2px; }
+
+.global-search-container input {
+  background: rgba(255, 255, 255, 0.08);
+  border: 1px solid var(--glass-border);
+  color: #f8fafc;
+}
+.global-search-container input::placeholder { color: rgba(248, 250, 252, 0.5); }
+
+.btn-theme-header, .btn-lang-header, .user-profile-header {
+  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid var(--glass-border);
+  color: #f0fdfa;
+}
+.btn-theme-header:hover, .btn-lang-header:hover { background: var(--brand-cyan-soft); }
+.ft-role-chip { background: var(--brand-cyan-soft-strong); color: var(--brand-cyan); }
+.user-name-text { color: #f0fdfa; }
+
+/* ---------------------------------------------------------------------------
+   القائمة الجانبية المنسدلة: لوحة زجاجية شبه شفافة بدل الخلفية الصلبة
+   --------------------------------------------------------------------------- */
+.nav-dropdown-menu {
+  background: var(--glass-bg) !important;
+  backdrop-filter: blur(var(--glass-blur));
+  -webkit-backdrop-filter: blur(var(--glass-blur));
+  border-inline-end: 1px solid var(--glass-border);
+  box-shadow: var(--shadow-elevated);
+}
+.nav-menu-sidebar-header { color: #f0fdfa; border-color: var(--glass-border); }
+.top-nav-item {
+  border-radius: var(--radius-md);
+  margin: 2px 8px;
+  transition: background .15s ease, color .15s ease;
+}
+.nav-dropdown-menu .top-nav-item { color: #e2f4f4; }
+.nav-dropdown-menu .top-nav-item:hover { background: var(--brand-cyan-soft) !important; }
+.nav-dropdown-menu .top-nav-item.active {
+  background: linear-gradient(90deg, var(--brand-cyan-soft-strong), transparent) !important;
+  border-inline-start: 3px solid var(--brand-cyan);
+  color: var(--brand-cyan);
+}
+.nav-dropdown-trigger-btn {
+  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid var(--glass-border);
+  color: #f0fdfa;
+}
+
+/* ---------------------------------------------------------------------------
+   لوحة المؤشرات (Analytics/Gauge): توهج سماوي حول المؤشر الدائري
+   --------------------------------------------------------------------------- */
+.gauge-fill-path {
+  stroke: var(--brand-cyan) !important;
+  filter: drop-shadow(0 0 6px rgba(34, 211, 238, 0.55));
+}
+.dashboard-analytics.card { border: 1px solid var(--glass-border); box-shadow: var(--shadow-elevated); }
+
+/* ---------------------------------------------------------------------------
+   شارات الحالة والأولوية: وزن أوضح وظل خفيف يعطيها بروزاً بصرياً
+   --------------------------------------------------------------------------- */
+.status-pill, .priority-pill, .ft-role-chip {
+  font-weight: 700;
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.15);
+}
+
+/* ---------------------------------------------------------------------------
+   الأزرار الأساسية: تدرج تركوازي-سماوي بدل اللون التركوازي الواحد المسطح
+   --------------------------------------------------------------------------- */
+.btn-teal-add {
+  background: linear-gradient(135deg, var(--brand-cyan) 0%, var(--teal-main) 100%) !important;
+  border: none !important;
+  box-shadow: 0 4px 14px rgba(34, 211, 238, 0.25);
+}
+.btn-teal-add:hover { filter: brightness(1.06); }
+
+/* ---------------------------------------------------------------------------
+   شريط تنقل سفلي جديد للهاتف فقط — عنصر إضافي بالكامل (شاهد إضافته بـ
+   index.html) مبني على نفس أزرار القائمة الأصلية بنفس الأصناف (class)
+   حتى يرث تلقائياً كل منطق الصلاحيات وحالة "active" الموجود أصلاً في
+   app.js دون الحاجة لأي تعديل جافاسكربت. يظهر فقط إذا كان هناك عنصر واحد
+   ظاهر على الأقل بداخله (بحيث لا يظهر فارغاً لدور الفني الذي له واجهته
+   الخاصة أصلاً).
+   --------------------------------------------------------------------------- */
+.bottom-nav-bar {
+  display: none;
+  position: fixed;
+  inset-inline: 0;
+  bottom: 0;
+  z-index: 500;
+  padding: 6px 4px calc(6px + env(safe-area-inset-bottom, 0px));
+  background: var(--card-bg);
+  border-top: 1px solid var(--border-color);
+  box-shadow: 0 -2px 14px rgba(0, 0, 0, 0.1);
+  gap: 2px;
+}
+@media (max-width: 850px) {
+  .bottom-nav-bar:has(.bottom-nav-item:not(.hidden)) { display: flex; }
+  .app-container { padding-bottom: 78px; }
+}
+.bottom-nav-item {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 2px;
+  background: none;
+  border: none;
+  padding: 6px 2px;
+  font-size: 10.5px;
+  color: var(--text-muted);
+  cursor: pointer;
+}
+.bottom-nav-item .nav-icon { font-size: 20px; line-height: 1; }
+.bottom-nav-item span:not(.nav-icon) {
+  display: block;
+  max-width: 68px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.bottom-nav-item.active { color: var(--brand-cyan); }
+
+/* ---------------------------------------------------------------------------
+   بطاقات الهاتف: على الشاشات الصغيرة، صفوف الجدول تُعرض كبطاقات مضغوطة
+   بدل الجدول الأفقي المزدحم — نفس البيانات ونفس أزرار الإجراءات تماماً،
+   فقط ترتيب بصري مختلف يلائم شاشة ضيقة (مطابقة لتصاميم الهاتف المرفقة).
+   --------------------------------------------------------------------------- */
+@media (max-width: 720px) {
+  .main-table-card .data-table thead { display: none; }
+  .main-table-card .data-table, .main-table-card .data-table tbody, .main-table-card .data-table tr, .main-table-card .data-table td {
+    display: block;
+    width: 100%;
+  }
+  .main-table-card .data-table tr {
+    background: var(--card-bg);
+    border: 1px solid var(--border-color);
+    border-radius: var(--radius-md);
+    margin-bottom: 10px;
+    padding: 10px 12px;
+    box-shadow: 0 1px 4px rgba(0,0,0,0.06);
+  }
+  .main-table-card .data-table td {
+    border: none;
+    padding: 4px 0;
+  }
+}
+
+/* ============================================================================
+   المرحلة ٢ — صفحة تفاصيل التذكرة (فحص العتاد/الإشارة/التوقيع) + بطاقات
+   وصول سريع بلوحة التحكم. إضافات فقط فوق كل ما سبق، بدون حذف أو تعديل أي
+   سطر HTML/CSS/JS قديم. كل قسم بصفحة التذكرة كان يفصله <hr class="separator">
+   فقط — أبقيناه كما هو وزدنا عليه فقط مظهر "بطاقة" مستقلة لكل قسم.
+   ============================================================================ */
+
+/* ---------- الفواصل القديمة بين أقسام التذكرة: نُبقيها موجودة، فقط بمظهر أنعم ---------- */
+#ticket-details-section hr.separator {
+  border: none;
+  border-top: 1px solid var(--glass-border);
+  margin: 20px 0;
+}
+
+/* ---------- كل قسم بصفحة التذكرة يصير بمظهر بطاقة مستقلة (نفس المحتوى القديم تماماً) ---------- */
+#ticket-details-section .form-group,
+#ticket-details-section .notes-section-box,
+#ticket-details-section .scanner-box {
+  background: var(--card-bg);
+  border: 1px solid var(--glass-border);
+  border-radius: var(--radius-lg);
+  padding: 16px;
+  box-shadow: var(--shadow-elevated);
+}
+#ticket-details-section h3 {
+  color: var(--text-dark);
+  font-size: 1.02rem;
+  margin-bottom: 12px;
+}
+
+/* ---------- بطاقة معلومات المشترك (كانت خلفية رمادية شفافة بسيطة) ---------- */
+#subscriber-info > div {
+  background: var(--brand-cyan-soft) !important;
+  border: 1px solid var(--glass-border) !important;
+  border-radius: var(--radius-lg) !important;
+}
+#subscriber-info p { margin: 7px 0; }
+#subscriber-info strong { color: var(--brand-cyan); margin-inline-end: 4px; }
+
+/* ---------- نتيجة فحص الإشارة الضوئية: توهج حسب النتيجة (ممتاز/متوسط/مرفوض) ---------- */
+#ticket-details-section .signal-box.excellent { box-shadow: 0 0 16px rgba(34, 197, 94, 0.35); }
+#ticket-details-section .signal-box.warning   { box-shadow: 0 0 16px rgba(217, 119, 6, 0.3); }
+#ticket-details-section .signal-box.rejected  { box-shadow: 0 0 16px rgba(220, 38, 38, 0.3); }
+
+/* ---------- منطقة التوقيع الرقمي: إطار أوضح ---------- */
+#ticket-details-section .signature-container {
+  box-shadow: var(--shadow-elevated);
+}
+
+/* ---------- بطاقات الوصول السريع بلوحة التحكم (عنصر جديد بالكامل — إضافة، شاهد
+   HTML)، مطابقة للصف العلوي بالأيقونات بتصميم الحاسوب المرفق (مفهوم أ) ---------- */
+.ft-quick-actions-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
+  gap: 10px;
+  margin-bottom: 16px;
+}
+.ft-quick-action-tile {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  padding: 14px 8px;
+  border-radius: var(--radius-lg);
+  background: var(--card-bg);
+  border: 1px solid var(--glass-border);
+  box-shadow: var(--shadow-elevated);
+  cursor: pointer;
+  text-align: center;
+  color: var(--text-dark);
+  font-size: 12.5px;
+  font-weight: 600;
+  transition: transform .15s ease, box-shadow .15s ease, border-color .15s ease;
+}
+.ft-quick-action-tile:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 12px 26px rgba(0, 0, 0, 0.14);
+  border-color: var(--brand-cyan);
+}
+.ft-quick-action-tile .qa-icon {
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--brand-cyan-soft);
+  font-size: 19px;
+}
+@media (max-width: 480px) {
+  .ft-quick-actions-grid { grid-template-columns: repeat(3, 1fr); }
+  .ft-quick-action-tile { font-size: 11px; padding: 10px 4px; }
+}
+
+/* ============================================================================
+   المرحلة ٣ — التقويم، التقارير، تقييم الأداء، المخزون، الخريطة الحية،
+   الموظفين، الرسائل. إضافات فقط فوق كل ما سبق — لا حذف ولا تعديل لأي سطر
+   قديم. يعتمد نفس أسلوب المرحلتين السابقتين: توهج سماوي + بطاقات زجاجية
+   خفيفة + تناسق مع نظام الألوان الموحّد أعلاه.
+   ============================================================================ */
+
+/* ---------- التقويم: تمييز اليوم الحالي والأولويات بوضوح أكبر ---------- */
+.ft-calendar-toolbar .btn-teal-add {
+  box-shadow: 0 3px 10px rgba(34, 211, 238, 0.25);
+}
+.ft-calendar-period-label {
+  color: var(--brand-cyan);
+  font-weight: 700;
+}
+.ft-calendar-legend {
+  background: var(--brand-cyan-soft);
+  border-radius: var(--radius-md);
+  padding: 8px 12px;
+  display: inline-flex;
+  gap: 16px;
+}
+
+/* ---------- بطاقات التقارير وتقييم الأداء: أرقام أبرز بتوهج خفيف ---------- */
+.report-box {
+  border: 1px solid var(--glass-border);
+  box-shadow: var(--shadow-elevated);
+}
+.report-num {
+  color: var(--brand-cyan);
+  text-shadow: 0 0 18px rgba(34, 211, 238, 0.25);
+}
+.performance-summary .report-box:hover,
+.reports-grid .report-box:hover {
+  border-color: var(--brand-cyan);
+  transform: translateY(-2px);
+  transition: transform .15s ease, border-color .15s ease;
+}
+
+/* ---------- إدارة مخزون العتاد: شكل عصري لنموذج الإضافة ---------- */
+.inventory-form {
+  background: var(--card-bg);
+  border: 1px solid var(--glass-border);
+  border-radius: var(--radius-lg);
+  padding: 14px;
+  box-shadow: var(--shadow-elevated);
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+  align-items: center;
+}
+.inventory-form input, .inventory-form select {
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-md);
+  padding: 8px 10px;
+}
+
+/* ---------- الخريطة الحية لتتبع الفنيين: إطار زجاجي متوهج حول الخريطة ---------- */
+#tech-map {
+  border: 1px solid var(--glass-border) !important;
+  box-shadow: var(--shadow-elevated);
+}
+#tech-map-legend > div {
+  background: var(--card-bg);
+  border: 1px solid var(--glass-border);
+  border-radius: var(--radius-md);
+  padding: 8px 12px;
+}
+
+/* ---------- إدارة الموظفين: تمييز حالة "نشط الآن" وبطاقات الإحصاء ---------- */
+#view-employees .report-box { border: 1px solid var(--glass-border); }
+#ft-add-employee-form {
+  background: transparent;
+}
+#ft-add-employee-form .btn-teal-add {
+  margin-top: 6px;
+}
+
+/* ---------- صندوق الرسائل: شارات العداد غير المقروء بتوهج تنبيهي ---------- */
+.ft-badge-count {
+  background: var(--priority-urgent-bg) !important;
+  box-shadow: 0 0 10px rgba(220, 38, 38, 0.5);
+  font-weight: 700;
+}
+
+/* ---------- تناسق عام: كل البطاقات الرئيسية (card) تاخذ نفس لمسة الحدّ
+   والظل الزجاجي المستخدم بباقي الصفحات، دون المساس بألوان الخلفيات
+   المصوّرة (card-tech-bg / card-network-bg / card-server-bg) الأصلية ---------- */
+.card {
+  border: 1px solid var(--glass-border);
+}
+
+/* ============================================================================
+   المرحلة ٤ — شاشة تسجيل الدخول + واجهة الفني الذاتية (profile) + الإعدادات.
+   إضافات فقط فوق كل ما سبق، دون حذف أو تعديل أي سطر قديم من هذا الملف.
+   ============================================================================ */
+
+/* ---------- شاشة تسجيل الدخول: خلفية زجاجية داكنة متوهجة بدل التدرج المسطح ---------- */
+.ft-login-screen {
+  background: radial-gradient(circle at 30% 20%, rgba(34, 211, 238, 0.12), transparent 55%),
+              linear-gradient(160deg, #071b1d, var(--brand-teal-deep) 55%, #0f2b2c);
+}
+.ft-login-grid-overlay {
+  background-image:
+    linear-gradient(rgba(34, 211, 238, 0.06) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(34, 211, 238, 0.06) 1px, transparent 1px);
+}
+.ft-login-card {
+  border: 1px solid var(--glass-border);
+  box-shadow: 0 25px 70px rgba(0, 0, 0, 0.45), 0 0 40px rgba(34, 211, 238, 0.08);
+}
+.ft-login-mark {
+  background: linear-gradient(135deg, var(--brand-cyan), var(--teal-main));
+  box-shadow: 0 0 20px rgba(34, 211, 238, 0.4);
+}
+.ft-login-card .btn-teal-add {
+  box-shadow: 0 6px 18px rgba(34, 211, 238, 0.3);
+}
+.ft-login-error {
+  background: rgba(220, 38, 38, 0.1);
+  color: #dc2626;
+  border: 1px solid rgba(220, 38, 38, 0.25);
+}
+.ft-login-card .form-group input {
+  border: 1px solid var(--border-color);
+  transition: border-color .15s ease, box-shadow .15s ease;
+}
+.ft-login-card .form-group input:focus {
+  border-color: var(--brand-cyan);
+  box-shadow: 0 0 0 3px var(--brand-cyan-soft);
+  outline: none;
+}
+
+/* ---------- واجهة الفني الذاتية (profile): نفس بطاقات الشاشة الرئيسية ---------- */
+#view-profile .card {
+  border: 1px solid var(--glass-border);
+  box-shadow: var(--shadow-elevated);
+}
+#view-profile .ft-priority-dot,
+#view-profile .status-pill {
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.15);
+}
+
+/* ---------- صفحة الإعدادات: توحيد شكل البطاقات والمفاتيح مع باقي التطبيق ---------- */
+#view-settings .card {
+  border: 1px solid var(--glass-border);
+}
+#view-settings input[type="checkbox"] {
+  accent-color: var(--brand-cyan);
+}
+
+/* ============================================================================
+   المرحلة ٥ (الأخيرة) — النوافذ المنبثقة (Modals)، الأزرار الثانوية، صفحة
+   الرسائل. إضافات فقط فوق كل ما سبق، دون حذف أو تعديل أي سطر قديم.
+   ============================================================================ */
+
+/* ---------- النوافذ المنبثقة: خلفية معتمة زجاجية + بطاقة متوهجة الحدود ---------- */
+.modal {
+  background: rgba(7, 20, 23, 0.6);
+  backdrop-filter: blur(4px);
+  -webkit-backdrop-filter: blur(4px);
+}
+.modal-content {
+  border: 1px solid var(--glass-border);
+  box-shadow: 0 25px 60px rgba(0, 0, 0, 0.4);
+}
+
+/* ---------- الأزرار الثانوية: تناسق مع الهوية الجديدة بدل الرمادي المسطح ---------- */
+.btn-secondary {
+  background: #64748b;
+  transition: background .15s ease, box-shadow .15s ease;
+}
+.btn-secondary:hover {
+  background: #55606f;
+  box-shadow: 0 3px 10px rgba(0, 0, 0, 0.15);
+}
+
+/* ---------- صفحة الرسائل: صندوق الوارد وقائمة المرفقات ---------- */
+#ft-messages-inbox-list > div {
+  border: 1px solid var(--glass-border) !important;
+}
+#ft-mgr-msg-attachment-preview img,
+#ft-mgr-msg-attachment-preview video {
+  border-radius: var(--radius-md);
+  border: 1px solid var(--glass-border);
+}
+#ft-mgr-msg-record-status {
+  color: var(--priority-urgent-bg) !important;
+}
+
+/* ============================================================================
+   المرحلة ٦ (تكميلية) — شريط حالة الاتصال بالشبكة، بانر تنبيه SLA، نافذة
+   الكاميرا الميدانية، صندوق ماسح الباركود/QR. إضافات فقط، بدون حذف أو
+   تعديل أي سطر قديم. بهذا تكون كل شاشة وكل عنصر بالتطبيق مغطى بالكامل.
+   ============================================================================ */
+
+/* ---------- شريط حالة الاتصال: توهج خفيف حسب الحالة (متصل/غير متصل) ---------- */
+.status-bar.online {
+  background: linear-gradient(90deg, #0d9488, #10b981);
+  box-shadow: 0 1px 8px rgba(16, 185, 129, 0.35);
+}
+.status-bar.offline {
+  background: linear-gradient(90deg, #b91c1c, #ef4444);
+  box-shadow: 0 1px 8px rgba(239, 68, 68, 0.35);
+}
+
+/* ---------- بانر تنبيه SLA: إبراز أوضح للحالة الحرجة ---------- */
+.sla-banner {
+  border: 1px solid var(--glass-border);
+  box-shadow: var(--shadow-elevated);
+}
+.sla-banner.sla-banner-critical {
+  box-shadow: 0 0 18px rgba(220, 38, 38, 0.35);
+}
+
+/* ---------- نافذة الكاميرا الميدانية: إطار زجاجي حول المعاينة المباشرة ---------- */
+.field-camera-modal-content {
+  border: 1px solid var(--glass-border);
+  box-shadow: 0 25px 60px rgba(0, 0, 0, 0.5);
+}
+
+/* ---------- صندوق ماسح الباركود/QR: إطار متوهج يوحي بالمسح النشط ---------- */
+.qr-camera-container {
+  border: 2px solid var(--brand-cyan);
+  border-radius: var(--radius-md);
+  box-shadow: 0 0 16px rgba(34, 211, 238, 0.35);
+  overflow: hidden;
+}
+
+/* ============================================================================
+   المرحلة ٧ (تدقيق ولمسات أخيرة) — بعد مراجعة الملف سطر سطر، هذه القواعد
+   تغطي عناصر كانت بدون تنسيق مخصص (section-header, settings-list,
+   toolbar-title, gauge-bg-path, bar-count-badge...) وتضيف حركة/hover
+   موحّدة على الأزرار وصفوف الجداول والبطاقات. إضافات فقط، لا حذف ولا
+   تعديل لأي سطر قديم.
+   ============================================================================ */
+
+/* ---------- عناوين الأقسام الفرعية وأشرطة الأدوات ---------- */
+.section-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin-bottom: 10px;
+}
+.toolbar-title {
+  color: var(--text-dark);
+  font-weight: 800;
+}
+
+/* ---------- قائمة الإعدادات: فواصل أنعم بين كل خيار ---------- */
+.settings-list > * {
+  padding: 10px 0;
+  border-bottom: 1px dashed var(--glass-border);
+}
+.settings-list > *:last-child { border-bottom: none; }
+
+/* ---------- نتيجة مسح الباركود: تتحول لشارة نجاح واضحة بعد المسح ---------- */
+.scanned-result-display {
+  display: inline-block;
+  background: var(--brand-cyan-soft);
+  border: 1px solid var(--glass-border);
+  border-radius: var(--radius-md);
+  padding: 8px 12px;
+}
+
+/* ---------- مسار خلفية المؤشر الدائري (Gauge): ينسجم مع الوضع الداكن أيضاً ---------- */
+.gauge-bg-path { stroke: var(--glass-border); }
+
+/* ---------- شارات الأرقام والنسب بجانب أشرطة التقدم بلوحة التحكم ---------- */
+.bar-count-badge {
+  background: var(--brand-cyan-soft-strong);
+  color: var(--brand-cyan);
+  border-radius: 10px;
+  padding: 1px 8px;
+  font-weight: 700;
+  font-size: 0.78rem;
+}
+.bar-percent-text strong { color: var(--brand-cyan); }
+
+/* ---------- تبويبات "مهامي المحوّلة / سجل مهامي" بواجهة الفني الذاتية ---------- */
+.ft-profile-tasks-tab.active {
+  background: var(--brand-cyan) !important;
+  color: #06282c !important;
+  box-shadow: 0 3px 10px rgba(34, 211, 238, 0.3);
+}
+
+/* ---------- معاينة الصور المرفقة: إطار موحد بدل الصور العارية ---------- */
+.image-preview-container img {
+  border-radius: var(--radius-md);
+  border: 1px solid var(--glass-border);
+  object-fit: cover;
+}
+
+/* ---------- حركة وhover موحّدة على كل الأزرار (لم تكن موجودة أصلاً) ---------- */
+.btn {
+  transition: transform .12s ease, box-shadow .12s ease, filter .12s ease, background .15s ease;
+}
+.btn:hover:not(:disabled) {
+  transform: translateY(-1px);
+}
+.btn:active:not(:disabled) {
+  transform: translateY(0);
+}
+.btn:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-visible {
+  outline: 2px solid var(--brand-cyan);
+  outline-offset: 1px;
+}
+
+/* ---------- حركة خفيفة عند تمرير الفأرة فوق صفوف الجداول (توضيح تفاعلي) ---------- */
+.data-table tbody tr {
+  transition: background .12s ease;
+}
+.data-table tbody tr:hover {
+  background: var(--brand-cyan-soft);
+}
+
+/* ---------- حركة خفيفة عند تمرير الفأرة فوق البطاقات الرئيسية ---------- */
+.card {
+  transition: box-shadow .15s ease;
+}
+.card:hover {
+  box-shadow: 0 12px 30px rgba(8, 20, 24, 0.12);
+}
+
+/* ---------- أيقونات القائمة الجانبية: مساحة موحّدة وتوسيط أفضل مع النص ---------- */
+.nav-dropdown-menu .top-nav-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+/* ---------- زر "تحديد صورة" ذو الحدود المتقطعة (كان بدون تنسيق hover مخصص) ---------- */
+.btn-outline:hover {
+  background: var(--brand-cyan-soft);
+  border-color: var(--brand-cyan) !important;
+}
+
+/* ============================================================================
+   المرحلة ٨ — عناصر مولّدة ديناميكياً من app.js (وليست بالـ HTML الثابت)
+   اكتُشفت بمقارنة كل الكلاسات المستخدمة داخل app.js مع كل الكلاسات
+   المعرّفة بهذا الملف. إضافة فقط، لا حذف ولا تعديل لأي سطر قديم.
+   ============================================================================ */
+
+/* ---------- صناديق تحديد التذاكر بالجدول (لإجراءات جماعية: نقل/حذف) ---------- */
+.ticket-checkbox {
+  width: 17px;
+  height: 17px;
+  accent-color: var(--brand-cyan);
+  cursor: pointer;
+}
+
+/* ---------- نص الملاحظة داخل بطاقة سجل الملاحظات ---------- */
+.note-content-text {
+  color: var(--text-dark);
+  line-height: 1.7;
+  margin: 6px 0;
+}
+
+/* ============================================================================
+   المرحلة ٩ (فحص جودة وتباين الألوان) — أثناء المراجعة الشاملة تبيّن أن
+   بعض النصوص السماوية (--brand-cyan) استُخدمت فوق خلفيات فاتحة بالوضع
+   النهاري (أرقام التقارير، شارات الأشرطة، نسبة الإنجاز...)، ما يقلّل
+   وضوح القراءة مقارنة بمعيار التباين المقبول. الحل: متغير نص منفصل
+   --brand-cyan-text بدرجة أغمق للوضع الفاتح وأفتح للوضع الداكن، يحل محل
+   --brand-cyan في مواضع النص تحديداً فقط (يبقى --brand-cyan كما هو
+   لاستخدامات الخلفيات والحدود والتوهج، غير المتأثرة بهذه المشكلة).
+   إضافة فقط، ولا تُحذف أي قاعدة سابقة — فقط تُستدرك لاحقاً بترتيب أحدث.
+   ============================================================================ */
+
+:root {
+  --brand-cyan-text: #0e7490; /* درجة أغمق للوضع الفاتح تضمن وضوح القراءة فوق البطاقات البيضاء */
+}
+body.dark-theme {
+  --brand-cyan-text: #67e8f9; /* درجة أفتح بالوضع الداكن لنفس سبب وضوح القراءة فوق البطاقات الغامقة */
+}
+
+.report-num,
+.ft-calendar-period-label,
+.bar-percent-text strong,
+.bar-count-badge,
+#subscriber-info strong {
+  color: var(--brand-cyan-text);
+}
