@@ -825,7 +825,13 @@ function ftRenderEmployeesView() {
 
 async function ftConfirmDeleteEmployee(userId) {
   const users = ftLoadUsers();
-  const target = users.find(u => u.id === userId);
+  // إصلاح: كان الزر بيمرر userId كنص دائماً (بسبب onclick="...('${emp.id}')" اللي يحيطه
+  // بعلامتي اقتباس)، بينما u.id قادم من السيرفر كرقم غالباً. المقارنة الصارمة (===) بين
+  // رقم ونص تفشل دائماً، فـ target كانت تبقى undefined ويخرج الكود فوراً بالسطر التالي
+  // (if (!target) return;) قبل حتى ظهور رسالة التأكيد أو الاتصال بالسيرفر - فيبدو للمستخدم
+  // أن زر "حذف" لا يفعل شيئاً إطلاقاً. الحل: تحويل الطرفين لنص عند المقارنة حتى يعمل
+  // التطابق بغض النظر عن نوع المعرّف (رقم / نص / UUID).
+  const target = users.find(u => String(u.id) === String(userId));
   if (!target) return;
   if (!confirm(`هل أنت متأكد من حذف حساب "${target.name}"؟ لا يمكن التراجع عن هذا الإجراء.`)) return;
 
@@ -839,6 +845,11 @@ async function ftConfirmDeleteEmployee(userId) {
       return;
     }
     ftDeleteTargetId = userId;
+    // حذف تفاؤلي فوري من الكاش المحلي بعد نجاح الحذف بالسيرفر - حتى لو فشل طلب تحديث
+    // الكاش (ftRefreshUsersCacheFromServer) لاحقاً بسبب انقطاع شبكة مؤقت، يبقى الموظف
+    // المحذوف مختفياً من الواجهة فوراً ولا يظهر مجدداً بالخطأ.
+    ftSaveUsersCache(users.filter(u => String(u.id) !== String(userId)));
+    ftRenderEmployeesView();
     await ftRefreshUsersCacheFromServer();
     ftRenderEmployeesView();
   } catch (err) {
