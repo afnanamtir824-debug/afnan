@@ -3435,8 +3435,40 @@ function escapeHtml(text) {
 
 async function resetLocalDB() {
   if (confirm(currentLang === 'ar' ? "هل أنت متأكد من مسح جميع البيانات المحلية وإعادة ضبطها؟" : "Wipe local DB and reset?")) {
-    await Dexie.delete('FieldTechDB');
-    window.location.reload();
+    // إصلاح: الدالة سابقاً كانت تمسح فقط قاعدة بيانات Dexie (IndexedDB)، بينما التطبيق
+    // يعتمد أيضاً على Service Worker يخزّن نسخة كاملة من الملفات (index.html, app.js,
+    // style.css...) داخل Cache Storage. لذلك كان الضغط على "مسح وإعادة التهيئة" يفرّغ
+    // بيانات المهام فقط لكن يبقي الملفات القديمة المخزّنة مؤقتاً كما هي، فتستمر المشكلة
+    // بالظهور حتى بعد "المسح" لأن الجهاز ما زال يحمّل نفس الإصدار القديم من الكود.
+    // الحل: نمسح قاعدة البيانات المحلية، ثم كل الكاشات (Cache Storage)، ثم نلغي تسجيل
+    // الـ Service Worker نفسه، وأخيراً نعيد تحميل الصفحة مباشرة من الشبكة (بدون كاش)
+    // حتى يحصل الجهاز فعلياً على أحدث نسخة من كل ملفات التطبيق دفعة واحدة.
+    try {
+      await Dexie.delete('FieldTechDB');
+    } catch (err) {
+      console.warn('تعذّر حذف قاعدة بيانات Dexie:', err);
+    }
+
+    try {
+      if (window.caches && caches.keys) {
+        const cacheNames = await caches.keys();
+        await Promise.all(cacheNames.map((name) => caches.delete(name)));
+      }
+    } catch (err) {
+      console.warn('تعذّر حذف الكاشات المخزّنة (Cache Storage):', err);
+    }
+
+    try {
+      if (navigator.serviceWorker && navigator.serviceWorker.getRegistrations) {
+        const registrations = await navigator.serviceWorker.getRegistrations();
+        await Promise.all(registrations.map((reg) => reg.unregister()));
+      }
+    } catch (err) {
+      console.warn('تعذّر إلغاء تسجيل الـ Service Worker:', err);
+    }
+
+    // إعادة تحميل قسرية من الشبكة (bypass الكاش المحلي للمتصفح نفسه) بدل reload() العادية
+    window.location.href = window.location.pathname + '?ft_reset=' + Date.now();
   }
 }
 
@@ -4953,3 +4985,40 @@ function ftRenderDashMapPreview() {
     new MutationObserver(sync).observe(original, { attributes: true, attributeFilter: ['class'] });
   });
 })();
+
+// ============================================================================
+// إضافة جديدة بالكامل (لا تعديل على أي دالة موجودة فوق): تسجيل الـ Service Worker
+// فعلياً. الجذر الحقيقي لمشكلة "التطبيق ما يتحدّث / ما يشتغل صح حتى بعد مسح
+// البيانات من الإعدادات" هو أن ملف sw.js موجود بالمشروع ومكتوب بعناية (فيه نظام
+// كاش وإصدارات) لكنه لم يكن مسجَّلاً (navigator.serviceWorker.register) بأي مكان
+// بالتطبيق إطلاقاً. بدون تسجيله، المتصفح لا يفعّل أي كاش أوفلاين حقيقي ولا يعرف
+// أصلاً بوجود تحديثات، فزر "مسح وإعادة التهيئة" بالإعدادات كان يمسح فقط قاعدة
+// بيانات المهام (IndexedDB) وهذا لا علاقة له بجذر المشكلة. هذا الكود يسجّل
+// الـ Service Worker، ويتابع ظهور أي نسخة جديدة منه (updatefound)، وبمجرد أن
+// تُصبح النسخة الجديدة هي المتحكمة بالصفحة (controllerchange) يعيد تحميل
+// الصفحة مرة واحدة تلقائياً حتى يرى المستخدم آخر تحديث دون أي تدخل يدوي.
+// ============================================================================
+if ('serviceWorker' in navigator) {
+  window.addEventListener('load', () => {
+    navigator.serviceWorker.register('./sw.js').then((registration) => {
+      // فحص دوري (كل مرة تُفتح فيها الصفحة أو تعود للمقدمة) عن وجود نسخة أحدث
+      registration.update().catch(() => {});
+      document.addEventListener('visibilitychange', () => {
+        if (document.visibilityState === 'visible') {
+          registration.update().catch(() => {});
+        }
+      });
+    }).catch((err) => {
+      console.warn('تعذّر تسجيل الـ Service Worker:', err);
+    });
+
+    // إعادة تحميل تلقائية واحدة فقط عند تفعّل نسخة جديدة من الـ Service Worker،
+    // مع حارس (ftSwReloaded) لمنع أي حلقة إعادة تحميل لا نهائية
+    let ftSwReloaded = false;
+    navigator.serviceWorker.addEventListener('controllerchange', () => {
+      if (ftSwReloaded) return;
+      ftSwReloaded = true;
+      window.location.reload();
+    });
+  });
+}
