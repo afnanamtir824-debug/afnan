@@ -2649,3 +2649,17 @@ body.dark-theme .data-table td, body.dark-theme .data-table th {
   border-radius: var(--radius-md);
   padding: 10px;
 }
+
+/* ============================================================================
+   المرحلة ١٤ — توحيد لون أيقونات بطاقات الوصول السريع (سماوي متوهج بدل
+   ألوان الإيموجي المتفرقة)، مطابقة لأسلوب الأيقونات الخطية بالصورة المرجعية.
+   ============================================================================ */
+.ft-quick-action-tile .qa-icon {
+  color: var(--brand-cyan);
+}
+body.dark-theme .ft-quick-action-tile .qa-icon {
+  filter: drop-shadow(0 0 4px rgba(34, 211, 238, 0.5));
+}
+.ft-quick-action-tile .qa-icon svg {
+  display: block;
+}
