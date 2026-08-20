@@ -462,6 +462,25 @@ function ftStatusMeta(id) {
   return FT_STATUS_OPTIONS.find(s => s.id === id) || FT_STATUS_OPTIONS[3];
 }
 
+const FT_DELETED_USER_IDS_KEY = 'ft_deleted_user_ids_v1'; // قائمة دائمة بمعرّفات المستخدمين المحذوفين محلياً (tombstones)
+
+function ftGetDeletedUserIds() {
+  try {
+    return JSON.parse(localStorage.getItem(FT_DELETED_USER_IDS_KEY) || '[]');
+  } catch (e) {
+    return [];
+  }
+}
+
+function ftAddDeletedUserId(id) {
+  const ids = ftGetDeletedUserIds();
+  const idStr = String(id);
+  if (!ids.includes(idStr)) {
+    ids.push(idStr);
+    localStorage.setItem(FT_DELETED_USER_IDS_KEY, JSON.stringify(ids));
+  }
+}
+
 // -------- كاش المستخدمين المحلي (offline) - يُحدَّث من السيرفر عند توفر الاتصال --------
 function ftLoadUsersCache() {
   const raw = localStorage.getItem(FT_USERS_CACHE_KEY);
@@ -519,7 +538,15 @@ async function ftApiFetch(path, options = {}) {
   if (token) headers['Authorization'] = 'Bearer ' + token;
   if (options.body && !headers['Content-Type']) headers['Content-Type'] = 'application/json';
 
-  const res = await fetch(path, Object.assign({}, options, { headers }));
+  // إصلاح: استثنينا مسبقاً طلبات /.netlify/functions/ من كاش الـ Service Worker (Cache
+  // Storage)، لكن يبقى كاش المتصفح العادي (HTTP cache) طبقة منفصلة تماماً - المتصفح
+  // بإمكانه يخزّن استجابة GET مؤقتاً بمعزل عن الـ Service Worker، وهذا وحده كان كافياً
+  // ليخلي قائمة الموظفين تعرض نسخة قديمة للحظة قبل ما ترجع الصحيحة (أو حتى تفضل عالقة
+  // على القديمة لو المتصفح اعتبرها لسا "طازجة"). الحل: نجبر كل طلب عبر هذه الدالة إنه
+  // يتجاوز كاش المتصفح كلياً (cache: 'no-store') ما لم يحدّد المستدعي خيار cache صراحةً.
+  const fetchOptions = Object.assign({ cache: 'no-store' }, options, { headers });
+
+  const res = await fetch(path, fetchOptions);
 
   if (res.status === 401) {
     // التوكن غير صالح/منتهي - سجّل خروج المستخدم إجبارياً بدل ترك الواجهة بحالة غير متسقة
@@ -605,9 +632,22 @@ async function ftHandleLogin(event) {
 async function ftRefreshUsersCacheFromServer() {
   const user = ftCurrentUser();
   if (!user || user.role === 'technician') return; // الفني لا يحتاج قائمة مستخدمين
-  const res = await ftApiFetch('/.netlify/functions/users-admin', { method: 'GET' });
+  // إضافة معامل بالرابط نفسه (لا علاقة له بالمعالجة بالسيرفر) لضمان رابط مختلف بكل مرة،
+  // كطبقة حماية إضافية ضد أي كاش وسيط (CDN/Edge) قد يخزّن الاستجابة حسب الرابط بغض النظر
+  // عن ترويسة Cache-Control المرسلة من المتصفح.
+  const res = await ftApiFetch('/.netlify/functions/users-admin?_=' + Date.now(), { method: 'GET' });
   if (!res.ok) return;
-  const users = await res.json();
+  let users = await res.json();
+  // إصلاح: حتى بعد استثناء الكاش المحلي (Service Worker) وكاش المتصفح، يبقى احتمال أن
+  // يرجع السيرفر لحظياً قائمة "قديمة بجزء من الثانية" مباشرة بعد الحذف (تأخر طبيعي بسيط
+  // بين تنفيذ الحذف وانعكاسه على استعلام القراءة). فكان الموظف يختفي من الشاشة للحظة ثم
+  // يعود فوراً لأن هذا التحديث اللاحق يكتب فوق الحذف التفاؤلي بنفس البيانات القديمة.
+  // الحل: نحتفظ محلياً بقائمة دائمة (tombstones) لكل مستخدم حُذف فعلياً من هذا الجهاز،
+  // ونستبعدهم دوماً من أي قائمة يرجعها السيرفر - بما أن الحذف أصلاً "لا يمكن التراجع عنه".
+  const deletedIds = ftGetDeletedUserIds();
+  if (deletedIds.length > 0) {
+    users = users.filter(u => !deletedIds.includes(String(u.id)));
+  }
   ftSaveUsersCache(users);
   return users;
 }
@@ -845,6 +885,9 @@ async function ftConfirmDeleteEmployee(userId) {
       return;
     }
     ftDeleteTargetId = userId;
+    // نسجّل هذا المعرّف كـ"محذوف نهائياً" محلياً حتى لو رجعه السيرفر لاحقاً بالخطأ بسبب
+    // تأخر بسيط بين الحذف وانعكاسه (انظر التعليق داخل ftRefreshUsersCacheFromServer)
+    ftAddDeletedUserId(userId);
     // حذف تفاؤلي فوري من الكاش المحلي بعد نجاح الحذف بالسيرفر - حتى لو فشل طلب تحديث
     // الكاش (ftRefreshUsersCacheFromServer) لاحقاً بسبب انقطاع شبكة مؤقت، يبقى الموظف
     // المحذوف مختفياً من الواجهة فوراً ولا يظهر مجدداً بالخطأ.
