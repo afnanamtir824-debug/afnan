@@ -2257,33 +2257,49 @@ db.open().catch(function (err) {
 
 // البيانات الأولية للتجربة (باسم شركة ألياف التقنية - FiberTech)
 async function seedInitialData() {
-  const count = await db.workOrders.count();
-  if (count === 0) {
-    const now = Date.now();
-    const day = 24 * 60 * 60 * 1000;
-    // ملاحظة إصلاح: كانت مواعيد المهام التجريبية (deadline) تواريخ ثابتة مكتوبة يدوياً
-    // (مثل "2026-03-29"). بمرور الوقت يتجاوز التاريخ الفعلي هذه القيم الثابتة فتظهر
-    // كل المهام التجريبية "متأخرة 🔴" فور أول تشغيل للتطبيق مهما كان تاريخ اليوم.
-    // الحل: حساب المواعيد ديناميكياً بالنسبة لتاريخ اليوم (نفس أسلوب createdAt أدناه)
-    // عبر ftDateStrOffset(عدد الأيام) بحيث يبقى مزيج واقعي من مهام متأخرة/قريبة/مستقبلية.
-    await db.workOrders.bulkAdd([
-      { id: 130003, customerName: "شركة الهدى للتجارة", phone: "0590000001", assignedTo: "أحمد الكردي", deadline: ftDateStrOffset(2), status: "pending", serviceType: "تركيب خدمة جديد (FTTH - ألياف ضوئية)", address: "رام الله - الشارع الرئيسي", priority: "urgent", createdAt: now - 2 * day },
-      { id: 120208, customerName: "مجمع الأمل الطبي", phone: "0590000002", assignedTo: "حلا", deadline: ftDateStrOffset(-5), status: "completed", serviceType: "صيانة وإصلاح ألياف ضوئية (FTTH Repair)", address: "البيرة - بالقرب من البلدية", priority: "normal", createdAt: now - 6 * day, completedAt: now - 5 * day, customerRating: 5 },
-      { id: 130022, customerName: "مكتبة النجاح", phone: "0590000003", assignedTo: "نور", deadline: ftDateStrOffset(-1), status: "on_hold", serviceType: "تركيب وإصلاح IPTV", address: "رام الله - الماصيون", priority: "low", createdAt: now - 3 * day },
-      { id: 130016, customerName: "فندق المدينة", phone: "0590000004", assignedTo: "افنان", deadline: ftDateStrOffset(0), status: "on_hold", serviceType: "استبدال عتاد / راوتر (Router Replacement)", address: "عين منجد", priority: "urgent", createdAt: now - 4 * day },
-      { id: 130045, customerName: "مركز الحاسوب العربي", phone: "0590000005", assignedTo: "أحمد الكردي", deadline: ftDateStrOffset(5), status: "pending", serviceType: "صيانة شبكات وسويتشات (Switch Maintenance)", address: "بيتونيا", priority: "normal", createdAt: now - 1 * day }
-    ]);
-  }
+  // إصلاح جوهري: كانت هذه الدالة تتحقق فقط من كون جدول المهام فارغاً (count === 0)
+  // لتقرر إضافة 5 "مهام تجريبية" ثابتة (أحمد الكردي، حلا، نور...) و4 عناصر مخزون تجريبية.
+  // المشكلة: بعد أن يضغط المستخدم "مسح وإعادة التهيئة" من الإعدادات، يُفرَّغ الجدول تماماً،
+  // لكن أول ما يعاد تحميل التطبيق ويسجّل الدخول من جديد، تُستدعى seedInitialData() وتجد
+  // الجدول فارغاً فتُعيد إدخال نفس المهام التجريبية الثابتة فوراً (خلال أقل من ثانية)!
+  // فيبدو للمستخدم أن "المسح" لم يُغيّر أي شيء لأن نفس البيانات "التجريبية" تعود كما هي.
+  // الحل: نستخدم علامة دائمة (localStorage) مستقلة عن جدول Dexie نفسه لتتبّع هل تم زرع
+  // البيانات التجريبية من قبل على هذا الجهاز أم لا. بهذا الشكل تُزرع البيانات التجريبية
+  // مرة واحدة فقط عند أول تشغيل فعلي للتطبيق على الجهاز، ولا تعود تلقائياً بعد أي عملية
+  // مسح متعمدة من المستخدم (لأن resetLocalDB() لا يمسح localStorage الخاص بهذه العلامة).
+  const alreadySeeded = localStorage.getItem('ft_demo_data_seeded') === '1';
 
-  // بيانات أولية لمخزون العتاد (لتجربة ربط الباركود بالمخزون الفعلي)
-  const invCount = await db.inventory.count();
-  if (invCount === 0) {
-    await db.inventory.bulkAdd([
-      { barcode: "ONU-2024-0001", deviceType: "ONU/ONT", model: "Huawei HG8245", status: "available", workOrderId: null, assignedTech: null },
-      { barcode: "ONU-2024-0002", deviceType: "ONU/ONT", model: "Huawei HG8245", status: "assigned", workOrderId: 120208, assignedTech: "حلا" },
-      { barcode: "RT-2024-0010", deviceType: "Router", model: "TP-Link Archer", status: "available", workOrderId: null, assignedTech: null },
-      { barcode: "SW-2024-0005", deviceType: "Switch", model: "TP-Link 8-Port", status: "available", workOrderId: null, assignedTech: null }
-    ]);
+  if (!alreadySeeded) {
+    const count = await db.workOrders.count();
+    if (count === 0) {
+      const now = Date.now();
+      const day = 24 * 60 * 60 * 1000;
+      // ملاحظة إصلاح: كانت مواعيد المهام التجريبية (deadline) تواريخ ثابتة مكتوبة يدوياً
+      // (مثل "2026-03-29"). بمرور الوقت يتجاوز التاريخ الفعلي هذه القيم الثابتة فتظهر
+      // كل المهام التجريبية "متأخرة 🔴" فور أول تشغيل للتطبيق مهما كان تاريخ اليوم.
+      // الحل: حساب المواعيد ديناميكياً بالنسبة لتاريخ اليوم (نفس أسلوب createdAt أدناه)
+      // عبر ftDateStrOffset(عدد الأيام) بحيث يبقى مزيج واقعي من مهام متأخرة/قريبة/مستقبلية.
+      await db.workOrders.bulkAdd([
+        { id: 130003, customerName: "شركة الهدى للتجارة", phone: "0590000001", assignedTo: "أحمد الكردي", deadline: ftDateStrOffset(2), status: "pending", serviceType: "تركيب خدمة جديد (FTTH - ألياف ضوئية)", address: "رام الله - الشارع الرئيسي", priority: "urgent", createdAt: now - 2 * day },
+        { id: 120208, customerName: "مجمع الأمل الطبي", phone: "0590000002", assignedTo: "حلا", deadline: ftDateStrOffset(-5), status: "completed", serviceType: "صيانة وإصلاح ألياف ضوئية (FTTH Repair)", address: "البيرة - بالقرب من البلدية", priority: "normal", createdAt: now - 6 * day, completedAt: now - 5 * day, customerRating: 5 },
+        { id: 130022, customerName: "مكتبة النجاح", phone: "0590000003", assignedTo: "نور", deadline: ftDateStrOffset(-1), status: "on_hold", serviceType: "تركيب وإصلاح IPTV", address: "رام الله - الماصيون", priority: "low", createdAt: now - 3 * day },
+        { id: 130016, customerName: "فندق المدينة", phone: "0590000004", assignedTo: "افنان", deadline: ftDateStrOffset(0), status: "on_hold", serviceType: "استبدال عتاد / راوتر (Router Replacement)", address: "عين منجد", priority: "urgent", createdAt: now - 4 * day },
+        { id: 130045, customerName: "مركز الحاسوب العربي", phone: "0590000005", assignedTo: "أحمد الكردي", deadline: ftDateStrOffset(5), status: "pending", serviceType: "صيانة شبكات وسويتشات (Switch Maintenance)", address: "بيتونيا", priority: "normal", createdAt: now - 1 * day }
+      ]);
+    }
+
+    // بيانات أولية لمخزون العتاد (لتجربة ربط الباركود بالمخزون الفعلي)
+    const invCount = await db.inventory.count();
+    if (invCount === 0) {
+      await db.inventory.bulkAdd([
+        { barcode: "ONU-2024-0001", deviceType: "ONU/ONT", model: "Huawei HG8245", status: "available", workOrderId: null, assignedTech: null },
+        { barcode: "ONU-2024-0002", deviceType: "ONU/ONT", model: "Huawei HG8245", status: "assigned", workOrderId: 120208, assignedTech: "حلا" },
+        { barcode: "RT-2024-0010", deviceType: "Router", model: "TP-Link Archer", status: "available", workOrderId: null, assignedTech: null },
+        { barcode: "SW-2024-0005", deviceType: "Switch", model: "TP-Link 8-Port", status: "available", workOrderId: null, assignedTech: null }
+      ]);
+    }
+
+    localStorage.setItem('ft_demo_data_seeded', '1');
   }
 }
 
