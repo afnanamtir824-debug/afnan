@@ -2564,29 +2564,28 @@ h1, h2, h3, .app-title, .brand-title, .page-title, .toolbar-title {
 }
 
 /* ============================================================================
-   المرحلة ١١ (حاسمة) — تطبيق "مفهوم ب: الزجاج المستقبلي الداكن" بالضبط
-   كخلفية أساسية دائمة للتطبيق كامل، وليس فقط كلمسات على مكونات معيّنة.
-   هذا هو سبب عدم تطابق النتيجة السابقة مع الصورة المرجعية: كانت الخلفية
-   العامة (--bg-app) والبطاقات (--card-bg) لسا فاتحة بالوضع الافتراضي.
-   الحل: إعادة تعريف نفس المتغيرات الأساسية هنا (لاحقاً بالكاسكيد، فتفوز
-   تلقائياً) لتصبح داكنة زجاجية بكل مكان يستخدمها — بدون حذف القواعد
-   الأصلية فوق، وبدون حذف تبديل الوضع الداكن/الفاتح الموجود أصلاً (يبقى
-   شغّالاً، بس الآن الحالة الافتراضية أصلاً داكنة زجاجية مطابقة للمرجع).
-   كذلك إرجاع اللون الأساسي لدرجة السماوي/التركوازي المتوهج (بدل تجربة
-   البنفسجي بالمرحلة السابقة) لأن الصورة المرجعية "مفهوم ب" تحديداً سماوية.
+   المرحلة ١٣ (تصحيح جوهري) — كانت المرحلة ١١ تفرض "مفهوم ب" الداكن دائماً
+   حتى بالوضع الفاتح، ما جعل زر تبديل الوضع الداكن/الفاتح الأصلي عديم التأثير
+   عملياً (الحالتان متطابقتان بصرياً تقريباً). التصحيح: الوضع الفاتح الافتراضي
+   = "مفهوم أ: الوضوح المجزأ" (خلفية فاتحة نظيفة، بطاقات بيضاء مسطّحة)،
+   والوضع الداكن (نفس زر وخاصية "dark-theme" الأصليين، لم يُحذف أو يُستبدل) =
+   "مفهوم ب: الزجاج المستقبلي الداكن" (خلفية داكنة، بطاقات زجاجية متوهجة).
+   بذلك تصبح الخاصية فعّالة فعلياً وتُظهر المفهومين بالضبط عند التبديل.
    ============================================================================ */
 
 :root {
-  /* رجوع للسماوي/التركوازي المتوهج (مطابقة "مفهوم ب" بالضبط) */
+  /* اللون الأساسي السماوي المتوهج يبقى ثابتاً بالحالتين (مشترك بين المفهومين) */
   --brand-cyan: #22d3ee;
   --brand-cyan-soft: rgba(34, 211, 238, 0.14);
-  --brand-cyan-soft-strong: rgba(34, 211, 238, 0.24);
+  --brand-cyan-soft-strong: rgba(34, 211, 238, 0.22);
+  --brand-cyan-text: #0e7490;
+}
+
+/* ---------- الوضع الداكن فقط = "مفهوم ب: الزجاج المستقبلي الداكن" ---------- */
+body.dark-theme {
   --brand-cyan-text: #67e8f9;
   --glass-border: rgba(148, 197, 197, 0.2);
   --glass-bg: rgba(13, 27, 34, 0.85);
-
-  /* الخلفية العامة والبطاقات: داكنة زجاجية دائماً (مطابقة الصورة)، وليست
-     مشروطة بتفعيل زر الوضع الداكن كما كان سابقاً */
   --bg-app: #070c11;
   --card-bg: rgba(17, 34, 42, 0.62);
   --border-color: rgba(148, 197, 197, 0.16);
@@ -2594,42 +2593,48 @@ h1, h2, h3, .app-title, .brand-title, .page-title, .toolbar-title {
   --text-muted: #9db3b3;
   --nav-bar-bg: #071417;
 }
-
-body {
-  font-family: var(--font-body), 'Tajawal', sans-serif !important;
+body.dark-theme {
   background:
     radial-gradient(1100px 700px at 15% -10%, rgba(34, 211, 238, 0.10), transparent 55%),
     radial-gradient(900px 600px at 100% 10%, rgba(34, 211, 238, 0.06), transparent 50%),
     linear-gradient(180deg, #050a0e 0%, #0a161c 100%) !important;
   background-attachment: fixed;
 }
+body {
+  font-family: var(--font-body), 'Tajawal', sans-serif !important;
+}
 
-/* البطاقات: مظهر زجاجي حقيقي (تمويه خلفي) بدل التلوين فقط — هذا العنصر
-   البصري الأساسي المميّز لمفهوم "الزجاج المستقبلي" بالصورة المرجعية */
-.card, .modal-content, .nav-dropdown-menu, .ft-quick-action-tile,
-.report-box, .inventory-form, .ft-login-card {
+/* البطاقات الزجاجية (تمويه خلفي) — حصراً بالوضع الداكن، لأن مفهوم "أ"
+   الفاتح بطاقاته مسطّحة نظيفة بدون تأثير زجاجي أصلاً */
+body.dark-theme .card, body.dark-theme .modal-content,
+body.dark-theme .nav-dropdown-menu, body.dark-theme .ft-quick-action-tile,
+body.dark-theme .report-box, body.dark-theme .inventory-form,
+body.dark-theme .ft-login-card {
   backdrop-filter: blur(16px);
   -webkit-backdrop-filter: blur(16px);
   border: 1px solid var(--glass-border) !important;
 }
 
-/* النصوص العادية والثانوية تتبع نفس المتغيرات المحدّثة أعلاه فتصبح فاتحة
-   تلقائياً فوق الخلفية الداكنة الجديدة (لا حاجة لإعادة كتابة كل قاعدة) */
-input, select, textarea {
+body.dark-theme input, body.dark-theme select, body.dark-theme textarea {
   background: rgba(255, 255, 255, 0.05) !important;
   border: 1px solid var(--glass-border) !important;
   color: var(--text-dark) !important;
 }
-input::placeholder, textarea::placeholder { color: var(--text-muted) !important; }
+body.dark-theme input::placeholder, body.dark-theme textarea::placeholder { color: var(--text-muted) !important; }
 
-/* الجداول: صفوف وحدود منسجمة مع الزجاج الداكن */
-.data-table th {
+body.dark-theme .data-table th {
   background: rgba(255, 255, 255, 0.04) !important;
   color: var(--text-muted) !important;
 }
-.data-table td, .data-table th {
+body.dark-theme .data-table td, body.dark-theme .data-table th {
   border-color: var(--glass-border) !important;
 }
+
+/* ---------- الوضع الفاتح (الافتراضي) = "مفهوم أ: الوضوح المجزأ" ---------- */
+/* لا حاجة لأي تعريف إضافي هنا — القيم الأصلية بأعلى الملف (خلفية فاتحة،
+   بطاقات بيضاء مسطّحة) هي بالضبط مفهوم "أ"، وتبقى فعّالة تلقائياً بمجرد
+   عدم تفعيل صنف dark-theme. هذا هو جوهر الإصلاح: الفصل الفعلي بين الحالتين
+   بدل فرض حالة واحدة دائماً. */
 
 /* ============================================================================
    المرحلة ١٢ — تنسيق بطاقة معاينة "الفنيين الآن" الجديدة بلوحة التحكم،
