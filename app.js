@@ -4893,3 +4893,40 @@ document.addEventListener('DOMContentLoaded', async () => {
   ftApplyAllResponsiveTableLabels();
   ftTablesObserver.observe(document.body, { childList: true, subtree: true });
 });
+// ============================================================================
+// إضافة جديدة بالكامل (لا تعديل على أي دالة موجودة فوق): معاينة "الفنيين الآن"
+// بلوحة التحكم — تقريب الترتيب البصري من التصميم المرجعي دون تكرار محرك
+// الخريطة الحقيقي (Leaflet) الموجود بتبويب الخريطة الكاملة، تجنباً لأي تعارض.
+// تُستخدم نفس دالة البيانات ftLoadUsers() الأصلية (قراءة فقط، بدون تعديل).
+// ============================================================================
+function ftRenderDashMapPreview() {
+  const list = document.getElementById('ft-dash-map-preview-list');
+  if (!list) return;
+  const employees = ftLoadUsers().filter(u => u.role === 'technician');
+  if (employees.length === 0) {
+    list.innerHTML = `<p style="color:var(--text-muted); font-size:0.75rem; margin:0;">لا يوجد فنيون مسجلون بعد.</p>`;
+    return;
+  }
+  list.innerHTML = employees.slice(0, 5).map(emp => {
+    const minutesAgo = emp.locUpdatedAt ? Math.round((Date.now() - emp.locUpdatedAt) / 60000) : null;
+    const isLive = minutesAgo !== null && minutesAgo < 5;
+    const dotColor = isLive ? '#12B76A' : (minutesAgo === null ? '#A6ABBB' : '#F5A524');
+    return `
+      <div style="display:flex; align-items:center; gap:8px; font-size:0.72rem;">
+        <span style="width:8px; height:8px; border-radius:50%; background:${dotColor}; flex-shrink:0;"></span>
+        <span style="flex:1; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">${escapeHtml(emp.name)}</span>
+      </div>`;
+  }).join('');
+}
+
+// مراقب DOM يستدعي المعاينة تلقائياً عند ظهور لوحة التحكم، دون الحاجة لتعديل
+// دالة switchTab الأصلية أو أي onclick موجود أصلاً بالملف.
+(function () {
+  const dashView = document.getElementById('view-dashboard');
+  if (!dashView) return;
+  const observer = new MutationObserver(() => {
+    if (!dashView.classList.contains('hidden')) ftRenderDashMapPreview();
+  });
+  observer.observe(dashView, { attributes: true, attributeFilter: ['class'] });
+  if (!dashView.classList.contains('hidden')) ftRenderDashMapPreview();
+})();
