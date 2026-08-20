@@ -11,7 +11,7 @@
   <!-- خطوط الهوية البصرية الجديدة (إضافة بحتة، لا تحذف أي وسم قديم) -->
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Changa:wght@700;800&family=Readex+Pro:wght@400;500;600;700&family=IBM+Plex+Mono:wght@500;600&display=swap" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/css2?family=Changa:wght@700;800&amp;family=Readex+Pro:wght@400;500;600;700&amp;family=IBM+Plex+Mono:wght@500;600&amp;display=swap" rel="stylesheet">
 
   <!-- ============ إعدادات إضافية لدعم تثبيت التطبيق (PWA) بشكل صحيح على الجوال ============ -->
   <!-- دعم تشغيل التطبيق كتطبيق مستقل على أندرويد -->
@@ -311,6 +311,19 @@
                 <span class="bar-percent-text"><span data-i18n="statPendingRate">قيد التنفيذ:</span> <strong id="stat-percent-pending">0%</strong></span>
               </div>
             </div>
+          </div>
+
+          <!-- بطاقة معاينة الفنيين النشطين — عنصر جديد بالكامل (إضافة فقط)، تقرّب
+               الترتيب من التصميم المرجعي بدون حذف أو تكرار محرك الخريطة الحقيقي
+               (Leaflet) الموجود بتبويب الخريطة الكاملة، تجنباً لأي تعارض تقني.
+               البيانات حقيقية (نفس مصدر بيانات الخريطة الأصلية ftLoadUsers)،
+               وليست تصميماً ثابتاً بدون وظيفة. -->
+          <div class="gauge-card ft-mini-map-preview" id="ft-dash-map-preview">
+            <div class="section-header" style="margin-bottom:8px;">
+              <span class="toolbar-title" style="font-size:0.85rem;">🗺️ الفنيون الآن</span>
+              <button class="btn btn-outline" style="padding:3px 8px; font-size:0.72rem;" onclick="switchTab('tech-map', null)">فتح الخريطة ↗</button>
+            </div>
+            <div id="ft-dash-map-preview-list" style="display:flex; flex-direction:column; gap:6px; max-height:150px; overflow-y:auto;"></div>
           </div>
 
         </div>
