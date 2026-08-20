@@ -4930,3 +4930,26 @@ function ftRenderDashMapPreview() {
   observer.observe(dashView, { attributes: true, attributeFilter: ['class'] });
   if (!dashView.classList.contains('hidden')) ftRenderDashMapPreview();
 })();
+
+// ============================================================================
+// إضافة جديدة بالكامل (لا تعديل على أي دالة موجودة فوق): مزامنة ظهور/إخفاء
+// أزرار شريط التنقل السفلي الجديدة (الخريطة/الرسائل/المزيد) مع نظيراتها
+// الأصلية بالقائمة الجانبية، لأن تلك العناصر تُظهر/تُخفى حسب صلاحية
+// المستخدم عبر id محدد (وليس عبر صنف عام)، فلا يجوز تكرار نفس id.
+// المراقبة هنا للقراءة فقط (classList) ولا تُعدّل منطق الصلاحيات الأصلي.
+// ============================================================================
+(function () {
+  const pairs = [
+    ['nav-item-tech-map', 'bottom-nav-tech-map'],
+    ['nav-item-messages', 'bottom-nav-messages'],
+    ['nav-item-profile', 'bottom-nav-profile']
+  ];
+  pairs.forEach(([originalId, mirrorId]) => {
+    const original = document.getElementById(originalId);
+    const mirror = document.getElementById(mirrorId);
+    if (!original || !mirror) return;
+    const sync = () => mirror.classList.toggle('hidden', original.classList.contains('hidden'));
+    sync();
+    new MutationObserver(sync).observe(original, { attributes: true, attributeFilter: ['class'] });
+  });
+})();
